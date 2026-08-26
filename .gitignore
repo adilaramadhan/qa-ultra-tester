@@ -1,0 +1,50 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Test results
+hasil-test/
+test-results/
+playwright-report/
+coverage/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Videos
+*.mp4
+*.webm
+
+# Screenshots (keep in repo for examples)
+# screenshots/
+
+# Performance reports
+lighthouse-report.*
+lighthouse-report/
+
+# Temporary files
+tmp/
+temp/
+*.tmp

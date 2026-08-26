@@ -1,0 +1,189 @@
+stages:
+  - setup
+  - test
+  - report
+  - deploy
+
+variables:
+  NODE_VERSION: "20"
+  PYTHON_VERSION: "3.11"
+  BASE_URL: $BASE_URL
+
+# ==================== SETUP ====================
+
+setup-environment:
+  stage: setup
+  image: mcr.microsoft.com/playwright:v1.45.0-jammy
+  script:
+    - npm ci
+    - pip install playwright pytest pytest-playwright openpyxl python-docx pillow
+    - npx playwright install --with-deps chromium firefox webkit
+  artifacts:
+    paths:
+      - node_modules/
+      - ~/.cache/ms-playwright/
+    expire_in: 1 hour
+
+# ==================== UI TESTING ====================
+
+ui-testing:
+  stage: test
+  needs: [setup-environment]
+  image: mcr.microsoft.com/playwright:v1.45.0-jammy
+  script:
+    - npx playwright test tests/ui/ --reporter=html,json
+  artifacts:
+    when: always
+    paths:
+      - test-results/
+      - playwright-report/
+    reports:
+      junit: test-results/junit.xml
+    expire_in: 7 days
+  allow_failure: false
+
+# ==================== API TESTING ====================
+
+api-testing:
+  stage: test
+  needs: [setup-environment]
+  image: mcr.microsoft.com/playwright:v1.45.0-jammy
+  script:
+    - npx playwright test tests/api/ --reporter=html,json
+  artifacts:
+    when: always
+    paths:
+      - test-results/
+    expire_in: 7 days
+  allow_failure: false
+
+# ==================== ACCESSIBILITY TESTING ====================
+
+accessibility-testing:
+  stage: test
+  needs: [setup-environment]
+  image: mcr.microsoft.com/playwright:v1.45.0-jammy
+  script:
+    - npx playwright test tests/accessibility/ --reporter=html,json
+  artifacts:
+    when: always
+    paths:
+      - test-results/
+    expire_in: 7 days
+  allow_failure: true
+
+# ==================== SECURITY TESTING ====================
+
+security-testing:
+  stage: test
+  needs: [setup-environment]
+  image: mcr.microsoft.com/playwright:v1.45.0-jammy
+  script:
+    - npx playwright test tests/security/ --reporter=html,json
+  artifacts:
+    when: always
+    paths:
+      - test-results/
+    expire_in: 7 days
+  allow_failure: false
+
+# ==================== PERFORMANCE TESTING ====================
+
+performance-testing:
+  stage: test
+  needs: [setup-environment]
+  image: mcr.microsoft.com/playwright:v1.45.0-jammy
+  script:
+    - npx playwright test tests/performance/ --reporter=html,json
+    - npx lighthouse $BASE_URL --output=html --output=json --chrome-flags="--headless"
+  artifacts:
+    when: always
+    paths:
+      - test-results/
+      - lighthouse-report.*
+    expire_in: 7 days
+  allow_failure: true
+
+# ==================== CHAOS TESTING ====================
+
+chaos-testing:
+  stage: test
+  needs: [setup-environment]
+  image: mcr.microsoft.com/playwright:v1.45.0-jammy
+  script:
+    - npx playwright test tests/chaos/ --reporter=html,json
+  artifacts:
+    when: always
+    paths:
+      - test-results/
+    expire_in: 7 days
+  allow_failure: true
+
+# ==================== FLAKY ANALYSIS ====================
+
+flaky-analysis:
+  stage: test
+  needs: [setup-environment]
+  image: mcr.microsoft.com/playwright:v1.45.0-jammy
+  script:
+    - |
+      for i in {1..3}; do
+        npx playwright test --reporter=json >> flaky-results.json
+      done
+    - python scripts/analyze_flaky.py
+  artifacts:
+    when: always
+    paths:
+      - flaky-results.json
+      - flaky-analysis/
+    expire_in: 7 days
+  allow_failure: true
+
+# ==================== REPORT GENERATION ====================
+
+generate-report:
+  stage: report
+  needs: [ui-testing, api-testing, accessibility-testing, security-testing, performance-testing, chaos-testing]
+  image: python:3.11-slim
+  script:
+    - pip install openpyxl python-docx pillow
+    - python scripts/generate_report.py
+    - python scripts/performance_analyzer.py
+    - python scripts/accessibility_checker.py
+  artifacts:
+    when: always
+    paths:
+      - hasil-test/
+    expire_in: 30 days
+  allow_failure: false
+
+# ==================== DEPLOY REPORT ====================
+
+deploy-pages:
+  stage: deploy
+  needs: [generate-report]
+  image: alpine:latest
+  script:
+    - mkdir -p public
+    - cp -r hasil-test/* public/
+  artifacts:
+    paths:
+      - public
+  only:
+    - main
+  allow_failure: true
+
+# ==================== NOTIFICATIONS ====================
+
+notify-slack:
+  stage: report
+  needs: [generate-report]
+  image: alpine:latest
+  script:
+    - |
+      apk add curl
+      curl -X POST -H 'Content-type: application/json' \
+        --data "{\"text\":\"QA Test Report Generated\"}" \
+        $SLACK_WEBHOOK_URL
+  when: always
+  allow_failure: true
