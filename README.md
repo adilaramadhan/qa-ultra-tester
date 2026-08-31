@@ -6,23 +6,33 @@ Skill pengujian kualitas perangkat lunak tingkat ultra yang menggabungkan UI tes
 
 ---
 
-## Features
+## 3 Trigger Modes
 
-### 10 Testing Layers
+Skill ini otomatis aktif dan mengarahkan scope testing sesuai 3 trigger mode:
+
+| Mode | Trigger Phrase / Command | Testing Scope & Layers | Output |
+|---|---|---|---|
+| **Mode 1: E2E Full Testing** | `"Testing E2E Menu [Nama Menu]..."`<br>`/qa-test` | **Semua 11 Layer Testing**<br>(UI/UX, API, a11y, Cross-Browser, DB, Video, Auto Bug, Data Gen, Perf, Flaky, Chaos) | Laporan Lengkap (HTML + DOCX), Playwright Specs lengkap (`smoke`, `negative`, `security`, `api`, `a11y`), Evidence, Logs |
+| **Mode 2: Bug Hunter** | `"Bug hunter menu [Nama Menu]..."`<br>`/qa-bug-hunter` | **5 Focus Layers**<br>(UI/UX, Security Injection, Chaos/Boundary, Video Recording, Flaky Analysis) | Laporan Temuan Defect/Bug (HTML + DOCX), Security Repro Specs (`security.spec.ts`), Screenshots & Video |
+| **Mode 3: API Testing** | `"API Testing menu [Nama Menu]..."`<br>`/qa-api` | **4 Backend Focus Layers**<br>(API/Network, DB Integrity, Perf Budget, Test Data Gen) | Laporan Validasi Endpoint (HTML + DOCX), API Test Specs (`api-validation.spec.ts`), Network Logs |
+
+---
+
+## Features & 11 Testing Layers
 
 | Layer | Description |
-|-------|-------------|
-| **UI/UX Testing** | 100% element interaction coverage |
-| **API Validation** | Intercept & validate every network request |
-| **Accessibility (WCAG)** | WCAG 2.1 AA compliance checking |
-| **Cross-Browser** | Chromium, Firefox, WebKit testing |
-| **Database Validation** | Data integrity verification |
-| **Video Recording** | Full test session recording |
-| **Auto Bug Reporting** | GitHub/Jira integration |
-| **Test Data Generator** | Synthetic data with boundary cases |
-| **Performance Budget** | Core Web Vitals tracking |
-| **Flaky Test Detection** | Retry & reliability analysis |
-| **Chaos Engineering** | Network, CPU, browser chaos |
+|---|---|
+| **Layer 1: UI/UX Testing** | 100% element interaction coverage (buttons, inputs, modals, navigation) |
+| **Layer 2: API Validation** | Intercept & validate every network request, status, and payload |
+| **Layer 3: Accessibility (WCAG)** | WCAG 2.1 AA compliance checking via axe-core & contrast scans |
+| **Layer 4: Cross-Browser** | Chromium, Firefox, WebKit rendering & responsive viewports |
+| **Layer 5: Database Validation** | CRUD data integrity & soft/hard delete verification |
+| **Layer 6: Video Recording** | Full test session recording (`.webm` / `.mp4`) |
+| **Layer 7: Test Data Generator** | Synthetic data with boundary, XSS, SQLi cases |
+| **Layer 8: Performance Budget** | Google Core Web Vitals (LCP, FID, CLS, TTFB) tracking |
+| **Layer 9: Flaky Test Detection** | Retry analysis (up to 3x) & reliability scoring |
+| **Layer 10: Chaos Engineering** | Network throttling (3G/offline), CPU slowdown, storage clear |
+| **Layer 11: Safety Boundaries** | Staging/sandbox safe execution constraints |
 
 ---
 
@@ -39,113 +49,73 @@ Skill pengujian kualitas perangkat lunak tingkat ultra yang menggabungkan UI tes
 
 ```bash
 # Clone skill ke folder OpenCode
-git clone https://github.com/your-repo/qa-ultra-tester.git ~/.config/opencode/skills/qa-ultra-tester
+git clone https://github.com/adilaramadhan/qa-ultra-tester.git ~/.config/opencode/skills/qa-ultra-tester
 
-# Install dependencies
+# Install Python dependencies
 pip install playwright openpyxl python-docx pillow
+
+# Install npm dependencies & Playwright browsers
+cd ~/.config/opencode/skills/qa-ultra-tester
+npm install
 npx playwright install --with-deps chromium firefox webkit
 ```
 
-### Install via npm (Global)
+---
+
+## Strict Reporting Contract & Artifacts
+
+Semua hasil pengujian disimpan terpusat di folder target aktif (**Strict Co-Location**):
+
+```
+[Target Folder]/hasil-test/
+├── QA_TEST_REPORT.docx           # Laporan Word bergambar (Times New Roman standar perusahaan)
+├── QA_TEST_REPORT.html           # Laporan HTML interaktif (Dark/Light toggle, Lightbox Modal Popup)
+├── test-results.json             # Single source of truth (JSON Schema validated)
+├── screenshots/                  # Bukti visual pengujian & bug reproduction
+├── videos/                       # Video rekaman sesi testing (.webm / .mp4)
+├── api-logs/                     # Network/API intercept logs
+└── tests/                        # Generated Playwright TypeScript test scripts
+    ├── playwright.config.ts
+    ├── smoke.spec.ts
+    ├── negative.spec.ts
+    ├── security.spec.ts
+    ├── api-validation.spec.ts
+    └── accessibility.spec.ts
+```
+
+---
+
+## Scripts & CLI
+
+### 1. Generate Report (HTML + DOCX)
+
+Menghasilkan laporan interaktif HTML (dengan Lightbox modal & Core Web Vitals) serta DOCX dari `test-results.json`:
 
 ```bash
-npm install -g qa-ultra-tester
+python scripts/generate_report.py [output_dir]
 ```
 
----
+### 2. Generate TypeScript Test Scripts
 
-## Usage
-
-### Basic Commands
-
-| Command | Description |
-|---------|-------------|
-| `/qa-test <url>` | Full E2E testing (all layers) |
-| `/qa-api <url>` | API-focused testing |
-| `/qa-a11y <url>` | Accessibility audit |
-| `/qa-perf <url>` | Performance testing |
-| `/qa-security <url>` | Security testing |
-| `/qa-regression <url>` | Regression testing |
-| `/qa-chaos <url>` | Chaos engineering |
-| `/qa-report` | Generate reports |
-
-### Natural Language
-
-```
-"Testing E2E untuk https://example.com"
-"QA testing https://example.com berdasarkan FSD ini"
-"Audit accessibility https://example.com"
-"Security test https://example.com/login"
-"Performance test https://example.com"
-```
-
----
-
-## Multi-Mode Input
-
-| Mode | Input | Description |
-|------|-------|-------------|
-| **Script-Driven** | Test script + FSD + URL | Execute existing tests |
-| **Spec-Driven** | FSD/PRD + URL | Generate tests from specs |
-| **Whitebox** | Source code + URL | Test based on code analysis |
-| **Blackbox** | URL only | Explore and test blindly |
-| **API-First** | API docs + URL | Test all endpoints |
-| **Regression** | Previous results + URL | Compare with baseline |
-
----
-
-## Output Artifacts
-
-```
-hasil-test/
-├── QA_TEST_REPORT.docx        # Word report with screenshots
-├── QA_TEST_REPORT.html        # Interactive HTML report
-├── test-results.json          # Machine-readable results
-├── screenshots/               # Bug evidence
-├── videos/                    # Test recordings
-├── api-logs/                  # Network logs
-├── tests/                     # Playwright scripts
-├── ci-cd/                     # Pipeline templates
-├── test-data/                 # Generated fixtures
-├── performance/               # Core Web Vitals
-├── accessibility/             # WCAG reports
-└── flaky-analysis/            # Reliability scores
-```
-
----
-
-## Quality Gates
-
-| Severity | Criteria | Action |
-|----------|----------|--------|
-| 🔴 CRITICAL | Security, data loss, auth bypass | Block release |
-| 🟠 HIGH | Validation bypass, broken features | Fix before release |
-| 🟡 MEDIUM | UX issues, accessibility | Fix after release |
-| 🟢 LOW | Cosmetic, documentation | Backlog |
-
----
-
-## Scripts
-
-### Generate Report
+Menghasilkan file test Playwright TypeScript (`.spec.ts`) otomatis dari `test-results.json`:
 
 ```bash
-python scripts/generate_report.py
+python scripts/generate_test_script.py [output_dir]
 ```
 
-### Generate Test Data
+### 3. Generate Test Data
 
 ```bash
 python scripts/generate_test_data.py
 ```
 
-### Analyze Performance
+### 4. Analyze Performance
 
 ```bash
 python scripts/performance_analyzer.py
 ```
 
-### Check Accessibility
+### 5. Check Accessibility
 
 ```bash
 python scripts/accessibility_checker.py
@@ -153,96 +123,26 @@ python scripts/accessibility_checker.py
 
 ---
 
+## Quality Gates
+
+| Severity | Criteria | Action |
+|---|---|---|
+| 🔴 **CRITICAL** | Security (XSS, SQLi, Auth Bypass), Data Loss, Server 500 | Block release |
+| 🟠 **HIGH** | Validation bypass, Broken non-critical flow, Perf > 5s | Fix before release |
+| 🟡 **MEDIUM** | UX inconsistencies, Minor visual bugs, a11y violations | Fix after release |
+| 🟢 **LOW** | Cosmetic issues, Typo, Documentation gaps | Backlog |
+
+---
+
 ## CI/CD Integration
 
-### GitHub Actions
-
-Copy `ci-cd/playwright-e2e.yml` ke `.github/workflows/`:
-
-```yaml
-# Add secrets
-# BASE_URL: Your target URL
-# SLACK_WEBHOOK_URL: Slack notification webhook
-```
-
-### GitLab CI
-
-Copy `ci-cd/.gitlab-ci.yml` ke root project:
-
-```yaml
-# Add variables
-# BASE_URL: Your target URL
-# SLACK_WEBHOOK_URL: Slack notification webhook
-```
-
----
-
-## Configuration
-
-### Thresholds
-
-Edit `scripts/performance_analyzer.py` untuk customize thresholds:
-
-```python
-THRESHOLDS = {
-    "LCP": {"good": 2500, "needs_improvement": 4000},
-    "FID": {"good": 100, "needs_improvement": 300},
-    "CLS": {"good": 0.1, "needs_improvement": 0.25}
-}
-```
-
-### WCAG Criteria
-
-Edit `scripts/accessibility_checker.py` untuk customize WCAG checks:
-
-```python
-WCAG_CRITERIA = {
-    "color_contrast": {"level": "AA", "criterion": "1.4.3"},
-    "keyboard_navigation": {"level": "A", "criterion": "2.1.1"}
-}
-```
-
----
-
-## Troubleshooting
-
-### Playwright not found
-
-```bash
-npx playwright install --with-deps chromium
-```
-
-### Python dependencies
-
-```bash
-pip install --upgrade playwright openpyxl python-docx pillow
-```
-
-### Permission denied
-
-```bash
-chmod +x scripts/*.py
-```
+Templates CI/CD siap pakai tersedia untuk:
+- GitHub Actions: `ci-cd/playwright-e2e.yml`
+- GitLab CI: `ci-cd/.gitlab-ci.yml`
+- Jenkins: `ci-cd/jenkins-pipeline.groovy`
 
 ---
 
 ## License
 
-MIT
-
----
-
-## Contributing
-
-1. Fork repository
-2. Create feature branch
-3. Commit changes
-4. Push to branch
-5. Create Pull Request
-
----
-
-## Support
-
-- GitHub Issues: [Report Bug](https://github.com/your-repo/qa-ultra-tester/issues)
-- Documentation: [Wiki](https://github.com/your-repo/qa-ultra-tester/wiki)
+MIT © [Adila Ramadhan](https://github.com/adilaramadhan)
