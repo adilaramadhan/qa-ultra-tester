@@ -1,4 +1,4 @@
-{
+﻿{
   "name": "qa-ultra-tester",
   "version": "1.0.0",
   "description": "Enterprise-Grade E2E Testing Skill for OpenCode with UI, API, Accessibility, Security, Performance, and Chaos Engineering",
@@ -12,6 +12,7 @@
     "test:perf": "npx playwright test tests/performance/",
     "test:chaos": "npx playwright test tests/chaos/",
     "report": "python scripts/generate_report.py",
+    "generate-scripts": "python scripts/generate_test_script.py",
     "test-data": "python scripts/generate_test_data.py",
     "performance": "python scripts/performance_analyzer.py",
     "accessibility": "python scripts/accessibility_checker.py"
@@ -38,7 +39,6 @@
     "@playwright/test": "^1.45.0",
     "typescript": "^5.5.0"
   },
-  "peerDependencies": {
-    "python": ">=3.10"
-  }
+  "peerDependencies": {}
 }
+

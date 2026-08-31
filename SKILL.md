@@ -1,6 +1,6 @@
 ---
 name: qa-ultra-tester
-description: Ultimate E2E QA testing skill with UI testing, API validation, accessibility (WCAG), cross-browser, database validation, video recording, auto bug reporting, test data generation, performance budget, flaky test detection, and advanced chaos engineering. Generates professional reports with embedded screenshots.
+description: Ultimate E2E QA testing skill with 3 trigger modes (Testing E2E, Bug Hunter, API Testing). Includes UI testing, API validation, accessibility (WCAG), cross-browser, database validation, video recording, auto bug reporting, test data generation, performance budget, flaky test detection, and advanced chaos engineering. Generates professional reports with embedded screenshots.
 ---
 
 # QA ULTRA TESTER - Enterprise-Grade E2E Testing Skill
@@ -335,155 +335,337 @@ await page.evaluate(() => {
 await page.reload();
 ```
 
+### Layer 11: Safety Boundaries
+
+**WAJIB DIPATUHI UNTUK CHAOS & SECURITY TESTING**
+
+```markdown
+## Batasan Keamanan
+- HANYA jalankan security test (SQLi, XSS, path traversal) di environment NON-PRODUCTION
+- WAJIB konfirmasi ke user sebelum menjalankan destructive test
+- Jangan pernah execute DROP/DELETE/TRUNCATE query di database production
+- Rate limit semua brute-force test (max 10 req/detik)
+- Jangan capture/log credential yang valid — hanya test payload
+
+## Batasan Chaos
+- CPU throttle max 6x (jangan freeze browser)
+- Network throttle boleh offline, tapi max 30 detik per sesi
+- Jangan clear storage di production tanpa konfirmasi user
+- CDP session: SATU context per page, jangan share antar tab
+```
+
 ---
 
-## 2. MULTI-MODE INPUT PROCESSING
+## 2. TRIGGER MODES (3 MODE UTAMA)
 
-| Mode | Input | Workflow |
-|------|-------|----------|
-| **Mode 1: Script + Spec + URL** | Test script + FSD/PRD + URL | Eksekusi script, validasi vs spesifikasi, tambah negative tests |
-| **Mode 2: Spec-Driven** | FSD/PRD/User Guide + URL | Bedah business rules, buat test matrix, gap analysis |
-| **Mode 3: Whitebox** | Source code + URL | Analisis kode, trace API, test live |
-| **Mode 4: Blackbox** | URL saja | Eksplorasi mandiri, identifikasi semua fitur |
-| **Mode 5: API-First** | API docs/Swagger + URL | Test semua endpoint, validasi schema, performance |
-| **Mode 6: Regression** | Previous test results + URL | Bandingkan dengan baseline, deteksi regression |
+Skill ini diaktifkan oleh **3 trigger utama**. Setiap trigger menentukan layer mana yang dieksekusi agar hemat token dan fokus.
+
+### Mode 1: Testing E2E Menu [nama_menu]
+
+**Trigger:** `Testing E2E menu ...` / `Testing E2E fitur ...`
+
+**Deskripsi:** Full end-to-end testing. Semua layer diaktifkan.
+
+| Layer | Status |
+|-------|--------|
+| Layer 1: UI/UX Testing | AKTIF |
+| Layer 2: API/Network Validation | AKTIF |
+| Layer 3: Accessibility (WCAG) | AKTIF |
+| Layer 4: Cross-Browser | AKTIF |
+| Layer 5: Database Validation | AKTIF |
+| Layer 6: Video Recording | AKTIF |
+| Layer 7: Test Data Generator | AKTIF |
+| Layer 8: Performance Budget | AKTIF |
+| Layer 9: Flaky Test Detection | AKTIF |
+| Layer 10: Chaos Engineering | AKTIF |
+| Layer 11: Safety Boundaries | AKTIF |
+
+**Execution Phases:** Phase 1-9 (semua)
+
+---
+
+### Mode 2: Bug Hunter Menu [nama_menu]
+
+**Trigger:** `Bug hunter menu ...` / `Bug hunting ...` / `Cari bug menu ...`
+
+**Deskripsi:** Fokus eksplorasi mencari bug. Interaksi UI intensif, inject security payload, stress test. TIDAK melakukan API schema validation, accessibility audit, cross-browser, atau database validation.
+
+| Layer | Status |
+|-------|--------|
+| Layer 1: UI/UX Testing | AKTIF |
+| Layer 2: API/Network Validation | SKIP |
+| Layer 3: Accessibility (WCAG) | SKIP |
+| Layer 4: Cross-Browser | SKIP |
+| Layer 5: Database Validation | SKIP |
+| Layer 6: Video Recording | AKTIF |
+| Layer 7: Test Data Generator | AKTIF (boundary data only) |
+| Layer 8: Performance Budget | SKIP |
+| Layer 9: Flaky Test Detection | AKTIF |
+| Layer 10: Chaos Engineering | AKTIF |
+| Layer 11: Safety Boundaries | AKTIF |
+
+**Execution Phases:**
+- Phase 1: Discovery
+- Phase 2: Happy Path (singkat, hanya core flow)
+- Phase 3: Negative Testing (INTENSIF — fokus cari bug)
+- Phase 4: Security Testing (INTENSIF)
+- Phase 7: Chaos Testing (INTENSIF)
+- Phase 8: Generate Test Scripts
+- Phase 9: Reporting
+
+---
+
+### Mode 3: API Testing [nama_endpoint/menu]
+
+**Trigger:** `API Testing ...` / `Test API ...`
+
+**Deskripsi:** Fokus pengujian API/network. Intercept semua request, validasi schema, response time, error handling. TIDAK melakukan UI interaction, accessibility, cross-browser, video recording, atau chaos engineering.
+
+| Layer | Status |
+|-------|--------|
+| Layer 1: UI/UX Testing | SKIP |
+| Layer 2: API/Network Validation | AKTIF (INTENSIF) |
+| Layer 3: Accessibility (WCAG) | SKIP |
+| Layer 4: Cross-Browser | SKIP |
+| Layer 5: Database Validation | AKTIF |
+| Layer 6: Video Recording | SKIP |
+| Layer 7: Test Data Generator | AKTIF |
+| Layer 8: Performance Budget | AKTIF (API response time focus) |
+| Layer 9: Flaky Test Detection | AKTIF |
+| Layer 10: Chaos Engineering | SKIP |
+| Layer 11: Safety Boundaries | AKTIF |
+
+**Execution Phases:**
+- Phase 1: Discovery (API endpoint mapping)
+- Phase 2: Happy Path (valid request/response)
+- Phase 3: Negative Testing (invalid payload, missing fields, wrong types)
+- Phase 4: Security Testing (auth bypass, token manipulation)
+- Phase 6: Performance Testing (response time, throughput)
+- Phase 8: Generate Test Scripts
+- Phase 9: Reporting
 
 ---
 
 ## 3. BUG REPORTING FORMAT
 
-```markdown
-### [🔴 CRITICAL] BUG-001: SQL Injection Vulnerable on Login Field
+**PENTING:** Format ini WAJIB konsisten dengan JSON schema di Section 4. Setiap bug ditulis ke `test-results.json` sebagai objek JSON, lalu script `generate_report.py` yang mencetak ke HTML/DOCX. Agent TIDAK BOLEH membuat tabel markdown ad-hoc.
 
-**Lokasi:** https://example.com/login - Email Input Field
-**Severity:** CRITICAL
-**Type:** Security / Injection
-**CVSS Score:** 9.8
-
-**Langkah Reproduksi:**
-1. Buka https://example.com/login
-2. Input `' OR '1'='1'; DROP TABLE users;--` di field email
-3. Input apa saja di field password
-4. Klik tombol Login
-
-**Kondisi Aktual:**
-- Login berhasil tanpa valid credential
-- Database table users terhapus
-- Error message menampilkan stack trace
-
-**Kondisi Harapan:**
-- Login gagal dengan message "Invalid credentials"
-- Input di-sanitize dan di-escape
-- Tidak ada error message yang leak implementation detail
-
-**Bukti:**
-- Screenshot: `screenshots/bug-001-login.png`
-- Video: `videos/bug-001-login.mp4`
-- API Log: `api-logs/bug-001-login.json`
-
-**Rekomendasi Solusi:**
-1. Implement parameterized queries / prepared statements
-2. Add input validation dan sanitization
-3. Implement rate limiting pada login endpoint
-4. Generic error messages saja (jangan display stack trace)
-
-**WCAG Impact:** None (Security issue)
-**Cross-browser:** Reproducible di semua browser
+```json
+{
+  "id": "BUG-001",
+  "severity": "CRITICAL",
+  "title": "SQL Injection Vulnerable on Login Field",
+  "location": "https://example.com/login - Email Input Field",
+  "steps": [
+    "1. Buka https://example.com/login",
+    "2. Input `' OR '1'='1'; DROP TABLE users;--` di field email",
+    "3. Input apa saja di field password",
+    "4. Klik tombol Login"
+  ],
+  "actual": "Login berhasil tanpa valid credential. Database table users terhapus. Error message menampilkan stack trace.",
+  "expected": "Login gagal dengan message 'Invalid credentials'. Input di-sanitize. Tidak ada error leak.",
+  "evidence": {
+    "screenshot": "screenshots/bug-001-login.png",
+    "video": "videos/bug-001-login.mp4",
+    "network_log": "api-logs/bug-001-login.json"
+  },
+  "recommendation": "1. Implement parameterized queries. 2. Add input validation. 3. Implement rate limiting. 4. Generic error messages."
+}
 ```
 
 ---
 
-## 4. OUTPUT ARTIFACTS
+## 4. STRICT REPORTING CONTRACT (SINGLE SOURCE OF TRUTH)
+
+**ATURAN MUTLAK:** Semua hasil testing WAJIB ditulis ke `hasil-test/test-results.json` dengan skema JSON ketat di bawah. Laporan HTML/DOCX/Markdown HANYA boleh di-generate dari file JSON ini via `python scripts/generate_report.py`. Agent DILARANG membuat format tabel/laporan kustom sendiri.
+
+### 4.1. JSON Schema — `test-results.json`
+
+```json
+{
+  "project_name": "string",
+  "target_url": "string",
+  "test_date": "YYYY-MM-DD",
+  "tester": "string",
+  "generated_at": "ISO-8601",
+  "quality_score": 0,
+  "video_recording": "videos/test-session.webm",
+  "summary": {
+    "total": 0,
+    "passed": 0,
+    "failed": 0,
+    "flaky": 0,
+    "duration_ms": 0
+  },
+  "bugs": [
+    {
+      "id": "BUG-001",
+      "severity": "CRITICAL|HIGH|MEDIUM|LOW",
+      "priority": "P1|P2|P3|P4",
+      "type": "Functional|Security|UI/UX|Validation",
+      "title": "string",
+      "location": "string",
+      "steps": ["step 1", "step 2"],
+      "actual": "string",
+      "expected": "string",
+      "evidence": {
+        "screenshot": "screenshots/bug-001.png",
+        "video": "videos/bug-001.webm",
+        "network_log": "api-logs/bug-001.json"
+      },
+      "recommendation": "string"
+    }
+  ],
+  "test_results": [
+    {
+      "name": "string",
+      "layer": "UI|API|A11Y|PERF|SECURITY|CHAOS",
+      "status": "PASS|FAIL",
+      "duration_ms": 0,
+      "browser": "Chromium|Firefox|WebKit",
+      "retries": 0,
+      "flaky": false,
+      "details": "string",
+      "screenshot": "screenshots/test-failed-name.png"
+    }
+  ],
+  "performance": {
+    "LCP": { "value": 0, "unit": "ms", "rating": "good|needs_improvement|poor" },
+    "FID": { "value": 0, "unit": "ms", "rating": "good|needs_improvement|poor" },
+    "CLS": { "value": 0, "unit": "", "rating": "good|needs_improvement|poor" },
+    "TTFB": { "value": 0, "unit": "ms", "rating": "good|needs_improvement|poor" }
+  },
+  "accessibility": [
+    {
+      "type": "string",
+      "element": "string",
+      "description": "string",
+      "wcag": "string",
+      "severity": "critical|serious|moderate|minor"
+    }
+  ]
+}
+```
+
+### 4.2. Workflow Pelaporan & Lokasi File
+
+**ATURAN LOKASI FILE (STRICT CO-LOCATION):**
+Semua output, file, folder, screenshot, video, script test, dan report **WAJIB dibuat dan disimpan HANYA di dalam folder kerja aktif** (working directory saat ini, misal `Testing menu Banner/hasil-test/`). DILARANG membuat file tercecer di luar direktori pengujian yang sedang aktif.
 
 ```
-hasil-test/
-├── QA_TEST_REPORT.docx           # Laporan Word bergambar
-├── QA_TEST_REPORT.html           # Laporan HTML interaktif
-├── test-results.json             # Machine-readable results
-├── screenshots/                  # Bukti visual
-│   ├── bug-001-login.png
-│   ├── bug-002-dashboard.png
-│   └── baseline-homepage.png
-├── videos/                       # Recording test sessions
-│   ├── test-session-001.mp4
-│   └── bug-replay-001.mp4
-├── api-logs/                     # Network/API logs
-│   ├── all-requests.json
-│   └── errors-only.json
-├── tests/                        # Playwright scripts
+1. Jalankan semua test di dalam folder target aktif
+2. Buat folder `hasil-test/` di DALAM folder target tersebut:
+   [Current Target Folder]/hasil-test/
+3. Semua screenshot masuk ke: [Current Target Folder]/hasil-test/screenshots/
+4. Semua video masuk ke: [Current Target Folder]/hasil-test/videos/
+5. Tulis `test-results.json` di: [Current Target Folder]/hasil-test/test-results.json
+6. Jalankan: python [path_skill]/scripts/generate_report.py "[Current Target Folder]/hasil-test"
+   → Output: QA_TEST_REPORT.html
+   → Output: QA_TEST_REPORT.docx
+7. Jalankan: python [path_skill]/scripts/generate_test_script.py "[Current Target Folder]/hasil-test"
+   → Output: [Current Target Folder]/hasil-test/tests/*.spec.ts
+```
+
+### 4.3. Output Artifacts (Terpusat di 1 Folder)
+
+```
+[Current Target Folder]/hasil-test/
+├── test-results.json             # SATU-SATUNYA sumber data (JSON ketat)
+├── QA_TEST_REPORT.html           # HTML report kustom premium (gambar & video embedded)
+├── QA_TEST_REPORT.docx           # Laporan Word bergambar profesional
+├── screenshots/                  # Semua bukti screenshot (bug, error, failure)
+│   ├── bug-001-*.png
+│   ├── bug-002-*.png
+│   └── fail-*.png
+├── videos/                       # Video rekaman sesi testing
+│   └── test-session.webm
+├── tests/                        # Playwright TypeScript test scripts
 │   ├── smoke.spec.ts
-│   ├── regression.spec.ts
+│   ├── negative.spec.ts
+│   ├── security.spec.ts
+│   ├── accessibility.spec.ts
+│   ├── performance.spec.ts
+│   ├── chaos.spec.ts
 │   ├── api-validation.spec.ts
-│   └── accessibility.spec.ts
-├── ci-cd/                        # Pipeline templates
-│   ├── playwright-e2e.yml
-│   ├── gitlab-ci.yml
-│   └── jenkins-pipeline.groovy
-├── test-data/                    # Generated test data
-│   ├── users.json
-│   └── fixtures.json
-├── performance/                  # Performance reports
-│   ├── lighthouse-report.json
-│   └── core-web-vitals.json
-├── accessibility/                # WCAG reports
-│   └── axe-report.json
-└── flaky-analysis/               # Flaky test tracking
-    └── reliability-scores.json
+│   └── playwright.config.ts
+└── api-logs/                     # Network request & response logs (jika ada)
+    └── all-requests.json
 ```
 
 ---
 
 ## 5. EXECUTION PROTOCOL
 
+**Phase yang dijalankan tergantung trigger mode (lihat Section 2).** Berikut daftar lengkap phase:
+
 ```markdown
-## Phase 1: Discovery (5-10 menit)
+## Phase 1: Discovery (5-10 menit) — ALL MODES
 1. Buka target URL
 2. Snapshot semua halaman
-3. Identify semua interactive elements
+3. Identify semua interactive elements (E2E & Bug Hunter) ATAU API endpoints (API Testing)
 4. Map navigation structure
 5. Identify forms, modals, tabs
 
-## Phase 2: Happy Path Testing (30-40%)
+## Phase 2: Happy Path Testing — E2E: 30-40% | Bug Hunter: 10% (core flow saja) | API: 20%
 1. Test semua happy path scenarios
 2. Verify core user flows
 3. Capture baseline screenshots
 4. Record network traffic
 
-## Phase 3: Negative Testing (25-30%)
+## Phase 3: Negative Testing — E2E: 25-30% | Bug Hunter: 35% (INTENSIF) | API: 30%
 1. Invalid inputs semua field
 2. Boundary testing
 3. Error message validation
 4. Form validation testing
 
-## Phase 4: Security Testing (10-15%)
-1. XSS injection semua input
-2. SQL injection semua input
+## Phase 4: Security Testing — E2E: 10-15% | Bug Hunter: 25% (INTENSIF) | API: 15%
+1. XSS injection semua input (NON-PRODUCTION ONLY)
+2. SQL injection semua input (NON-PRODUCTION ONLY)
 3. Path traversal testing
 4. Authentication/authorization testing
 
-## Phase 5: Accessibility Testing (10%)
+## Phase 5: Accessibility Testing — E2E: 10% | Bug Hunter: SKIP | API: SKIP
 1. axe-core scan
 2. Keyboard navigation test
 3. Color contrast check
 4. ARIA validation
 
-## Phase 6: Performance Testing (5-10%)
+## Phase 6: Performance Testing — E2E: 5-10% | Bug Hunter: SKIP | API: 15%
 1. Core Web Vitals measurement
 2. Page load timing
 3. Resource size analysis
 4. API response time
 
-## Phase 7: Chaos Testing (5-10%)
+## Phase 7: Chaos Testing — E2E: 5-10% | Bug Hunter: 20% (INTENSIF) | API: SKIP
 1. Network throttling
 2. Rapid interactions
 3. Session disruption
 4. Browser stress test
 
-## Phase 8: Reporting (10%)
-1. Aggregate all results
-2. Generate test reports
-3. Create CI/CD templates
-4. Document recommendations
+## Phase 8: Generate TypeScript Test Scripts (WAJIB — ALL MODES)
+1. Generate Playwright TypeScript spec files di `hasil-test/tests/`
+2. Setiap layer testing WAJIB punya file `.spec.ts` sendiri
+3. Script WAJIB menggunakan TypeScript (bukan JavaScript)
+4. Gunakan `python scripts/generate_test_script.py` untuk scaffolding
+5. Struktur file:
+   - `smoke.spec.ts` — happy path
+   - `negative.spec.ts` — negative/boundary
+   - `security.spec.ts` — security injection
+   - `accessibility.spec.ts` — axe-core WCAG (E2E only)
+   - `performance.spec.ts` — Core Web Vitals (E2E & API only)
+   - `chaos.spec.ts` — chaos engineering (E2E & Bug Hunter only)
+   - `api-validation.spec.ts` — API intercept & validation (E2E & API only)
+
+## Phase 9: Reporting (WAJIB via Pipeline — ALL MODES)
+1. WAJIB simpan video rekaman ke `hasil-test/videos/` atau path root `hasil-test/`
+2. WAJIB ambil screenshot untuk:
+   - Setiap bug temuan (`hasil-test/screenshots/bug-xxx.png`)
+   - Setiap test case yang FAILED / ERROR (`hasil-test/screenshots/fail-xxx.png`)
+   - Ketidaksesuaian UI/UX / anomaly visual
+3. Tulis SEMUA data ke `hasil-test/test-results.json` (JSON ketat sesuai Section 4)
+4. Jalankan `python scripts/generate_report.py`
+5. Output: `QA_TEST_REPORT.html` (HTML kustom premium) + `QA_TEST_REPORT.docx`
+6. DILARANG menulis laporan dalam format lain di luar pipeline ini
 ```
 
 ---
@@ -520,17 +702,13 @@ hasil-test/
 
 ## 7. AUTOMATION COMMANDS
 
-| Command | Description |
-|---------|-------------|
-| `/qa-test <url>` | Full E2E testing |
-| `/qa-api <url>` | API-focused testing |
-| `/qa-a11y <url>` | Accessibility audit |
-| `/qa-perf <url>` | Performance testing |
-| `/qa-security <url>` | Security testing |
-| `/qa-regression <url>` | Regression testing |
-| `/qa-chaos <url>` | Chaos engineering |
-| `/qa-report` | Generate reports |
-| `/qa-fix` | Auto-fix suggestions |
+| Command | Mode | Description |
+|---------|------|-------------|
+| `Testing E2E menu [X]` | E2E | Full testing semua layer |
+| `Bug hunter menu [X]` | Bug Hunter | Fokus cari bug (UI, Security, Chaos) |
+| `API Testing [X]` | API | Fokus API validation & performance |
+| `/qa-report` | — | Generate reports dari test-results.json |
+| `/qa-generate-scripts` | — | Generate TypeScript spec files dari test-results.json |
 
 ---
 
@@ -557,46 +735,81 @@ hasil-test/
 
 ## 9. REPORT TEMPLATE
 
-```markdown
-# QA TEST REPORT - [Project Name]
+Laporan di-generate HANYA oleh `python scripts/generate_report.py` dari `test-results.json`.
 
-## Executive Summary
-- Total Tests: XXX
-- Passed: XXX (XX%)
-- Failed: XXX (XX%)
-- Flaky: XXX (XX%)
-- Duration: XX minutes
+**HTML Report** menggunakan desain kustom premium (BUKAN bawaan Playwright reporter):
+- Dashboard dengan quality score gauge, summary cards, severity breakdown chart
+- Bug details lengkap: steps reproduksi, evidence (screenshot embedded base64), recommendation
+- Test matrix tabel per-layer (UI/API/A11Y/PERF/SECURITY/CHAOS)
+- Performance Core Web Vitals dengan bar chart warna (good/needs_improvement/poor)
+- Accessibility violations dengan WCAG criterion
+- Flaky test analysis
+- Dark/light mode toggle, responsive, printable
 
-## Quality Score: X/100
+**DOCX Report** menggunakan template profesional terstandarisasi:
+- Cover page: Judul (Times New Roman 22pt bold), Subtitle (16pt), Tabel info dengan background (Target URL, Fitur Uji, Tanggal, Metodologi, Status Kesiapan)
+- Section headings: Times New Roman 14pt bold
+- Body text & tabel: Times New Roman 12pt
+- Header tabel: Dark Blue (#1B3A5C) dengan teks putih
+- Zebra rows (abu-abu muda) pada baris genap tabel
+- Severity color-coded: Critical (Merah), High (Orange), Medium (Kuning Tua), Low (Hijau)
+- Screenshot bukti visual di-embed langsung di dokumen dengan caption bernomor
+- Struktur: Cover -> Ringkasan Eksekutif -> Statistik Bug -> Rincian Bug -> Hasil Pengujian Fitur -> Performa -> Aksesibilitas -> Bukti Visual -> Rekomendasi Tindak Lanjut
 
-### Breakdown
-- Functionality: XX/100
-- Security: XX/100
-- Accessibility: XX/100
-- Performance: XX/100
-- Cross-browser: XX/100
-
-## Critical Issues
-1. [BUG-001] SQL Injection on Login
-2. [BUG-002] XSS on Search Field
-
-## Recommendations
-1. Fix all CRITICAL issues before release
-2. Address HIGH issues within 1 week
-3. Schedule MEDIUM issues for next sprint
-
-## Production Readiness: ❌ NOT READY / ✅ READY
-```
+**JSON Report** (`test-results.json`) adalah satu-satunya sumber data — semua format lain dibaca dari sini.
 
 ---
 
 ## 10. SKILL ACTIVATION
 
-Skill ini aktif secara otomatis saat user meminta:
-- "Testing E2E untuk [URL]"
-- "QA testing [URL]"
-- "Audit website [URL]"
-- "Check accessibility [URL]"
-- "Security test [URL]"
-- "Performance test [URL]"
-- Atu command `/qa-test`, `/qa-api`, `/qa-a11y`, dll.
+Skill ini **HANYA** diaktifkan oleh 3 trigger berikut:
+
+### Trigger 1: Testing E2E
+```
+"Testing E2E menu [nama_menu]"
+"Testing E2E fitur [nama_fitur]"
+"Testing E2E [URL]"
+```
+→ Jalankan **SEMUA layer** (full coverage). Cocok untuk pre-release testing.
+
+### Trigger 2: Bug Hunter
+```
+"Bug hunter menu [nama_menu]"
+"Bug hunting [nama_menu/URL]"
+"Cari bug menu [nama_menu]"
+"Hunt bug [nama_menu]"
+```
+→ Jalankan layer **UI/UX, Security, Chaos, Video, Flaky, Test Data** saja. Fokus menemukan bug sebanyak mungkin.
+
+### Trigger 3: API Testing
+```
+"API Testing [nama_endpoint/menu]"
+"Test API [nama_endpoint/menu]"
+"API test [URL]"
+```
+→ Jalankan layer **API Validation, Database, Performance, Test Data, Flaky** saja. Fokus endpoint, schema, response time.
+
+### Contoh Prompt Lengkap (Optimal 1 Prompt)
+
+```
+Testing E2E menu Banner di https://example.com
+
+Login:
+- Inputer: NIK 12345 / Password: pass123
+- Approver: NIK 67890 / Password: pass456
+
+Lokasi: Menu Utama > Master Data > Banner
+Scope: Input data baru, Edit, Delete, Approve, Reject, Unapprove
+```
+
+```
+Bug hunter menu Banner Input di https://example.com
+Login: NIK 12345 / Password: pass123
+Fokus: form input, validasi file upload, boundary testing
+```
+
+```
+API Testing menu User Management di https://example.com
+Login: NIK admin01 / Password: admin123
+Fokus: CRUD endpoint, auth token, response schema
+```
