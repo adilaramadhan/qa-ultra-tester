@@ -203,10 +203,10 @@ class QAReportGenerator:
             else:
                 mode = "e2e"
 
-        # ── Page setup (Letter, margins top=72pt, bottom=50.4pt, left=57.6pt, right=57.6pt) ──
+        # ── Page setup (Letter, margins top=90pt, bottom=50.4pt, left=57.6pt, right=57.6pt) ──
         sec = doc.sections[0]
         sec.header_distance = Pt(28)
-        sec.top_margin = Pt(90) if mode in ['bug_hunter', 'api'] else Pt(72)
+        sec.top_margin = Pt(90)
         sec.bottom_margin = Pt(50.4)
         sec.left_margin = Pt(57.6)
         sec.right_margin = Pt(57.6)
@@ -267,7 +267,7 @@ class QAReportGenerator:
                 hrun.add_picture(str(logo_path), height=Inches(0.72))
 
         # Default typography
-        font_family = 'Times New Roman' if mode == 'e2e' else 'Calibri'
+        font_family = 'Calibri'
         style = doc.styles['Normal']
         style.font.name = font_family
         style.font.size = Pt(11)
@@ -373,50 +373,56 @@ class QAReportGenerator:
         # ROUTE LAYOUT SESUAI MODE
         # ════════════════════════════════════════════════════════
 
-        # ── MODE 1: TESTING E2E (Formal Multi-Page Layout) ───
+        # ── MODE 1: TESTING E2E (Formal Comprehensive Layout) ───
         if mode == "e2e":
-            # COVER PAGE (Formal Title & Separate Page)
-            title_p = doc.add_paragraph()
-            title_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            title_p.paragraph_format.space_before = Pt(60)
-            title_p.paragraph_format.space_after = Pt(8)
-            run = title_p.add_run("LAPORAN HASIL PENGUJIAN QA E2E")
-            run.font.size = Pt(22)
-            run.font.color.rgb = BRAND_NAVY
-            run.bold = True
-            run.font.name = font_family
+            # HEADER BANNER (Single cell with Navy BG - Consistent with Bug Hunter & API)
+            banner_tbl = doc.add_table(rows=1, cols=1)
+            banner_tbl.style = 'Table Grid'
+            auto_width(banner_tbl)
+            b_cell = banner_tbl.rows[0].cells[0]
+            set_cell_shading(b_cell, HEADER_BG)
+            
+            bp0 = b_cell.paragraphs[0]
+            bp0.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            bp0.paragraph_format.space_before = Pt(8)
+            bp0.paragraph_format.space_after = Pt(2)
+            r0 = bp0.add_run("LAPORAN HASIL PENGUJIAN QA E2E")
+            r0.font.name = 'Calibri'
+            r0.font.size = Pt(22)
+            r0.bold = True
+            r0.font.color.rgb = HEADER_FG
 
-            sub_p = doc.add_paragraph()
-            sub_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            sub_p.paragraph_format.space_after = Pt(24)
-            run = sub_p.add_run(project.upper())
-            run.font.size = Pt(16)
-            run.font.color.rgb = BRAND_NAVY
-            run.bold = True
-            run.font.name = font_family
+            bp1 = b_cell.add_paragraph()
+            bp1.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            bp1.paragraph_format.space_before = Pt(0)
+            bp1.paragraph_format.space_after = Pt(8)
+            r1 = bp1.add_run(f"END-TO-END AUTOMATION REPORT – {project.upper()}")
+            r1.font.name = 'Calibri'
+            r1.font.size = Pt(13)
+            r1.bold = True
+            r1.font.color.rgb = LIGHT_SUBTITLE
 
-            # Cover Metadata Table
-            cover_tbl = doc.add_table(rows=6, cols=2)
-            cover_tbl.style = 'Table Grid'
-            auto_width(cover_tbl)
-            cover_data = [
+            doc.add_paragraph('')
+
+            # Info Table
+            meta_tbl = doc.add_table(rows=6, cols=2)
+            meta_tbl.style = 'Table Grid'
+            auto_width(meta_tbl)
+            meta_data = [
                 ("Target / Environment", target),
-                ("Fitur Uji", project),
+                ("Fitur / Modul Uji", project),
                 ("Tanggal Uji", test_date),
                 ("Metodologi / Tester", tester),
                 ("Quality Score", f"{quality}/100" if quality else "-"),
                 ("Status Kesiapan", readiness),
             ]
-            for i, (label, val) in enumerate(cover_data):
-                set_cell_shading(cover_tbl.rows[i].cells[0], "1B2A8A")
-                set_cell_text(cover_tbl.rows[i].cells[0], label, bold=True, color=HEADER_FG, size=10)
-                set_cell_shading(cover_tbl.rows[i].cells[1], "F2F4FB")
+            for i, (label, val) in enumerate(meta_data):
+                set_cell_shading(meta_tbl.rows[i].cells[0], INFO_LABEL_BG)
+                set_cell_text(meta_tbl.rows[i].cells[0], label, bold=True, size=10)
                 if label == "Status Kesiapan":
-                    set_cell_text(cover_tbl.rows[i].cells[1], val, bold=True, color=readiness_col, size=10)
+                    set_cell_text(meta_tbl.rows[i].cells[1], val, bold=True, color=readiness_col, size=10)
                 else:
-                    set_cell_text(cover_tbl.rows[i].cells[1], val, size=10)
-
-            doc.add_page_break()
+                    set_cell_text(meta_tbl.rows[i].cells[1], val, size=10)
 
             # Section 1: Executive Summary
             add_h1("1. Ringkasan Eksekutif (Executive Summary)")
@@ -517,6 +523,12 @@ class QAReportGenerator:
                 for idx, bug in enumerate(bugs, 1):
                     s_num = get_sev_num(bug.get("severity", 3))
                     theme = SEV_THEME[s_num]
+                    set_cell_text(bug_tbl.rows[idx].cells[0], bug.get("id", f"BUG-{idx:03d}"), bold=True)
+                    set_cell_text(bug_tbl.rows[idx].cells[1], bug.get("title", ""))
+                    set_cell_shading(bug_tbl.rows[idx].cells[2], theme["bg"])
+                    set_cell_text(bug_tbl.rows[idx].cells[2], theme["name"], bold=True, color=theme["text_col"])
+                    set_cell_text(bug_tbl.rows[idx].cells[3], bug.get("priority", "-"), align=WD_ALIGN_PARAGRAPH.CENTER)
+                    set_cell_text(bug_tbl.rows[idx].cells[4], bug.get("status", "Open"), align=WD_ALIGN_PARAGRAPH.CENTER)
                     set_cell_text(bug_tbl.rows[idx].cells[0], bug.get("id", f"BUG-{idx:03d}"), bold=True)
                     set_cell_text(bug_tbl.rows[idx].cells[1], bug.get("title", ""))
                     set_cell_shading(bug_tbl.rows[idx].cells[2], theme["bg"])
