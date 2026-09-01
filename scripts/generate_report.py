@@ -633,35 +633,36 @@ class QAReportGenerator:
                     add_h2(f"{b_id} – {b_title}")
 
                     # Structured Table for Bug Details
-                    detail_tbl = doc.add_table(rows=6, cols=2)
+                    detail_tbl = doc.add_table(rows=8, cols=2)
                     detail_tbl.style = 'Table Grid'
                     auto_width(detail_tbl)
 
-                    # Row 0: Severity & Priority
+                    # Row 0: Severity
                     set_cell_shading(detail_tbl.rows[0].cells[0], INFO_LABEL_BG)
-                    set_cell_text(detail_tbl.rows[0].cells[0], "Severity / Priority", bold=True, size=10)
-                    p_meta = detail_tbl.rows[0].cells[1].paragraphs[0]
-                    p_meta.paragraph_format.space_before = Pt(2)
-                    p_meta.paragraph_format.space_after = Pt(2)
-                    r_s = p_meta.add_run(f"Severity {s_num} ({theme['name']})")
-                    r_s.bold = True
-                    r_s.font.color.rgb = theme["text_col"]
-                    r_s.font.name = font_family
-                    r_s.font.size = Pt(10)
-                    r_p = p_meta.add_run(f"   |   Priority: {bug.get('priority', '-')}   |   Tipe: {bug.get('type', '-')}")
-                    r_p.font.name = font_family
-                    r_p.font.size = Pt(10)
+                    set_cell_text(detail_tbl.rows[0].cells[0], "Severity", bold=True, size=10)
+                    set_cell_shading(detail_tbl.rows[0].cells[1], theme["bg"])
+                    set_cell_text(detail_tbl.rows[0].cells[1], f"Severity {s_num} – {theme['name']}", bold=True, color=theme["text_col"], size=10)
 
-                    # Row 1: Lokasi
+                    # Row 1: Priority
                     set_cell_shading(detail_tbl.rows[1].cells[0], INFO_LABEL_BG)
-                    set_cell_text(detail_tbl.rows[1].cells[0], "Lokasi / Endpoint", bold=True, size=10)
-                    set_cell_text(detail_tbl.rows[1].cells[1], bug.get("location", target), size=10)
+                    set_cell_text(detail_tbl.rows[1].cells[0], "Priority", bold=True, size=10)
+                    set_cell_text(detail_tbl.rows[1].cells[1], bug.get("priority", "-"), bold=True, size=10)
 
-                    # Row 2: Langkah Reproduksi
+                    # Row 2: Tipe Bug
                     set_cell_shading(detail_tbl.rows[2].cells[0], INFO_LABEL_BG)
-                    set_cell_text(detail_tbl.rows[2].cells[0], "Langkah Reproduksi", bold=True, size=10)
+                    set_cell_text(detail_tbl.rows[2].cells[0], "Tipe Bug", bold=True, size=10)
+                    set_cell_text(detail_tbl.rows[2].cells[1], bug.get("type", "-"), size=10)
+
+                    # Row 3: Lokasi
+                    set_cell_shading(detail_tbl.rows[3].cells[0], INFO_LABEL_BG)
+                    set_cell_text(detail_tbl.rows[3].cells[0], "Lokasi / Endpoint", bold=True, size=10)
+                    set_cell_text(detail_tbl.rows[3].cells[1], bug.get("location", target), size=10)
+
+                    # Row 4: Langkah Reproduksi
+                    set_cell_shading(detail_tbl.rows[4].cells[0], INFO_LABEL_BG)
+                    set_cell_text(detail_tbl.rows[4].cells[0], "Langkah Reproduksi", bold=True, size=10)
                     steps = bug.get("steps", [])
-                    c_step = detail_tbl.rows[2].cells[1]
+                    c_step = detail_tbl.rows[4].cells[1]
                     c_step.text = ""
                     if steps:
                         for idx_s, step in enumerate(steps, 1):
@@ -679,20 +680,20 @@ class QAReportGenerator:
                     else:
                         set_cell_text(c_step, "-", size=10)
 
-                    # Row 3: Hasil Aktual
-                    set_cell_shading(detail_tbl.rows[3].cells[0], INFO_LABEL_BG)
-                    set_cell_text(detail_tbl.rows[3].cells[0], "Hasil Aktual", bold=True, size=10)
-                    set_cell_text(detail_tbl.rows[3].cells[1], bug.get("actual", "-"), color=TEXT_RED, size=10)
-
-                    # Row 4: Hasil Diharapkan
-                    set_cell_shading(detail_tbl.rows[4].cells[0], INFO_LABEL_BG)
-                    set_cell_text(detail_tbl.rows[4].cells[0], "Hasil Diharapkan", bold=True, size=10)
-                    set_cell_text(detail_tbl.rows[4].cells[1], bug.get("expected", "-"), color=TEXT_GREEN, size=10)
-
-                    # Row 5: Rekomendasi
+                    # Row 5: Hasil Aktual
                     set_cell_shading(detail_tbl.rows[5].cells[0], INFO_LABEL_BG)
-                    set_cell_text(detail_tbl.rows[5].cells[0], "Rekomendasi", bold=True, size=10)
-                    set_cell_text(detail_tbl.rows[5].cells[1], bug.get("recommendation", "-"), bold=True, color=BRAND_NAVY, size=10)
+                    set_cell_text(detail_tbl.rows[5].cells[0], "Hasil Aktual", bold=True, size=10)
+                    set_cell_text(detail_tbl.rows[5].cells[1], bug.get("actual", "-"), color=TEXT_RED, size=10)
+
+                    # Row 6: Hasil Diharapkan
+                    set_cell_shading(detail_tbl.rows[6].cells[0], INFO_LABEL_BG)
+                    set_cell_text(detail_tbl.rows[6].cells[0], "Hasil Diharapkan", bold=True, size=10)
+                    set_cell_text(detail_tbl.rows[6].cells[1], bug.get("expected", "-"), color=TEXT_GREEN, size=10)
+
+                    # Row 7: Rekomendasi
+                    set_cell_shading(detail_tbl.rows[7].cells[0], INFO_LABEL_BG)
+                    set_cell_text(detail_tbl.rows[7].cells[0], "Rekomendasi", bold=True, size=10)
+                    set_cell_text(detail_tbl.rows[7].cells[1], bug.get("recommendation", "-"), bold=True, color=BRAND_NAVY, size=10)
 
                     evidence = bug.get("evidence", "")
                     screenshot = evidence if isinstance(evidence, str) else ""
