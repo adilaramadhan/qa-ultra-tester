@@ -443,27 +443,85 @@ class QAReportGenerator:
             set_cell_text(sum_tbl.rows[1].cells[2], str(failed), color=TEXT_RED if failed > 0 else TEXT_GREEN, bold=True, align=WD_ALIGN_PARAGRAPH.CENTER)
             set_cell_text(sum_tbl.rows[1].cells[3], success_rate, bold=True, align=WD_ALIGN_PARAGRAPH.CENTER)
 
-            # Section 2: Hasil Pengujian Semua Layer
-            add_h1("2. Hasil Pengujian Fitur & Validasi (All Layers)")
-            if tests:
-                test_tbl = doc.add_table(rows=len(tests) + 1, cols=5)
-                test_tbl.style = 'Table Grid'
-                auto_width(test_tbl)
-                add_header_row(test_tbl, ["No", "Fitur / Skenario", "Hasil", "Status", "Layer"])
-                for idx, test in enumerate(tests, 1):
-                    status = test.get("status", "").strip().lower()
+            # Section 2: Hasil Pengujian Fitur & Skenario (Happy Path & Negative)
+            add_h1("2. Hasil Pengujian Skenario (Happy Path & Negative)")
+            
+            happy_tests = [t for t in tests if t.get("category") == "happy_path" or (not t.get("category") and str(t.get("status","")).strip().lower() in ["pass", "passed", "success", "ok"] and "invalid" not in t.get("name","").lower() and "fail" not in t.get("name","").lower())]
+            negative_tests = [t for t in tests if t not in happy_tests]
+
+            def _render_test_scenario_tables(test_list, category_title, start_num):
+                if not test_list:
+                    return start_num
+                
+                h2 = doc.add_paragraph()
+                h2.paragraph_format.space_before = Pt(8)
+                h2.paragraph_format.space_after = Pt(4)
+                r_h2 = h2.add_run(category_title)
+                r_h2.font.name = 'Calibri'
+                r_h2.font.size = Pt(12)
+                r_h2.bold = True
+                r_h2.font.color.rgb = BRAND_NAVY
+
+                for idx, test in enumerate(test_list, start_num):
+                    status = str(test.get("status", "")).strip().lower()
                     is_pass = status in ["pass", "passed", "success", "ok"]
                     status_text = "PASSED" if is_pass else "FAILED"
                     status_color = TEXT_GREEN if is_pass else TEXT_RED
-                    error = test.get("error", "") or test.get("details", "")
                     duration_text = format_duration(test.get("duration_ms", test.get("duration", 0)))
-                    result_desc = f"Durasi: {duration_text}" + (f" | {error}" if error else "")
+                    
+                    steps = test.get("steps", [])
+                    if isinstance(steps, list) and steps:
+                        steps_str = "\n".join([f"{strip_step_number(s)}" for s in steps])
+                    elif isinstance(steps, str) and steps:
+                        steps_str = steps
+                    else:
+                        steps_str = "-"
+                        
+                    expected_str = test.get("expected", "-")
+                    actual_str = test.get("actual", test.get("details", test.get("error", "-")))
 
-                    set_cell_text(test_tbl.rows[idx].cells[0], str(idx), align=WD_ALIGN_PARAGRAPH.CENTER)
-                    set_cell_text(test_tbl.rows[idx].cells[1], test.get("name", ""))
-                    set_cell_text(test_tbl.rows[idx].cells[2], result_desc)
-                    set_cell_text(test_tbl.rows[idx].cells[3], status_text, bold=True, color=status_color, align=WD_ALIGN_PARAGRAPH.CENTER)
-                    set_cell_text(test_tbl.rows[idx].cells[4], test.get("layer", "UI").upper(), align=WD_ALIGN_PARAGRAPH.CENTER)
+                    # Scenario detail card table
+                    card_tbl = doc.add_table(rows=5, cols=2)
+                    card_tbl.style = 'Table Grid'
+                    auto_width(card_tbl)
+                    
+                    # Row 0: Header with Test Name & Status
+                    set_cell_shading(card_tbl.rows[0].cells[0], INFO_LABEL_BG)
+                    set_cell_shading(card_tbl.rows[0].cells[1], INFO_LABEL_BG)
+                    set_cell_text(card_tbl.rows[0].cells[0], f"Skenario #{idx}: {test.get('name', '')}", bold=True, color=BRAND_NAVY, size=10)
+                    set_cell_text(card_tbl.rows[0].cells[1], f"[{status_text}] ({duration_text})", bold=True, color=status_color, align=WD_ALIGN_PARAGRAPH.RIGHT, size=10)
+
+                    # Row 1: Steps to Reproduce
+                    set_cell_shading(card_tbl.rows[1].cells[0], INFO_LABEL_BG)
+                    set_cell_text(card_tbl.rows[1].cells[0], "Steps / Langkah", bold=True, size=9)
+                    set_cell_text(card_tbl.rows[1].cells[1], steps_str, size=9)
+
+                    # Row 2: Expected Result
+                    set_cell_shading(card_tbl.rows[2].cells[0], INFO_LABEL_BG)
+                    set_cell_text(card_tbl.rows[2].cells[0], "Expected Result", bold=True, size=9)
+                    set_cell_text(card_tbl.rows[2].cells[1], expected_str, color=TEXT_GREEN, size=9)
+
+                    # Row 3: Actual Result
+                    set_cell_shading(card_tbl.rows[3].cells[0], INFO_LABEL_BG)
+                    set_cell_text(card_tbl.rows[3].cells[0], "Actual Result", bold=True, size=9)
+                    set_cell_text(card_tbl.rows[3].cells[1], actual_str, color=TEXT_RED if not is_pass else None, size=9)
+
+                    # Row 4: Layer & Environment
+                    set_cell_shading(card_tbl.rows[4].cells[0], INFO_LABEL_BG)
+                    set_cell_text(card_tbl.rows[4].cells[0], "Layer / Browser", bold=True, size=9)
+                    set_cell_text(card_tbl.rows[4].cells[1], f"{test.get('layer', 'UI').upper()} | {test.get('browser', 'Chromium')}", size=9)
+
+                    doc.add_paragraph('').paragraph_format.space_after = Pt(4)
+
+                return start_num + len(test_list)
+
+            curr_idx = 1
+            if happy_tests:
+                curr_idx = _render_test_scenario_tables(happy_tests, f"2.1 Skenario Happy Path ({len(happy_tests)} Tests)", curr_idx)
+            if negative_tests:
+                curr_idx = _render_test_scenario_tables(negative_tests, f"2.2 Skenario Negative / Boundary ({len(negative_tests)} Tests)", curr_idx)
+            if not tests:
+                doc.add_paragraph("Tidak ada detail skenario test yang tercatat.")
 
             # Section 3: Performance Core Web Vitals
             if perf:
@@ -964,44 +1022,75 @@ class QAReportGenerator:
                 </div>
             </div>'''
 
-        # Test results rows — with screenshot for failed tests
-        test_rows = ""
-        for t in tests:
-            status_raw = t.get("status", "").strip().lower()
-            is_pass = status_raw in ["pass", "passed"]
-            status_cls = "pass" if is_pass else "fail"
-            flaky_mark = '<span class="flaky-badge">FLAKY</span>' if t.get("flaky") else ""
-            dur_ms = t.get("duration_ms", t.get("duration", 0))
+        # Test results grouped by Category (Happy Path vs Negative) + detail breakdown
+        happy_tests = [t for t in tests if t.get("category") == "happy_path" or (not t.get("category") and str(t.get("status","")).strip().lower() in ["pass", "passed", "success", "ok"] and "invalid" not in t.get("name","").lower() and "fail" not in t.get("name","").lower())]
+        negative_tests = [t for t in tests if t not in happy_tests]
 
-            # Screenshot column for failed tests
-            screenshot_cell = ""
-            if not is_pass:
+        def _render_html_test_group(test_list, group_name):
+            if not test_list:
+                return ""
+            group_html = f'<div class="category-header"><span>{group_name}</span><span class="category-count">{len(test_list)} Skenario</span></div>'
+            for idx, t in enumerate(test_list, 1):
+                status_raw = str(t.get("status", "")).strip().lower()
+                is_pass = status_raw in ["pass", "passed", "success", "ok"]
+                status_cls = "pass" if is_pass else "fail"
+                flaky_mark = '<span class="flaky-badge">FLAKY</span>' if t.get("flaky") else ""
+                dur_ms = t.get("duration_ms", t.get("duration", 0))
+                status_display = "PASSED" if is_pass else "FAILED"
+                
+                # Steps formatting
+                steps = t.get("steps", [])
+                if isinstance(steps, list) and steps:
+                    steps_li = "".join([f"<li>{strip_step_number(s)}</li>" for s in steps])
+                    steps_html = f"<ol>{steps_li}</ol>"
+                elif isinstance(steps, str) and steps:
+                    steps_html = f"<p>{steps}</p>"
+                else:
+                    steps_html = "<p style='color:var(--text-secondary)'>-</p>"
+
+                expected = t.get("expected", "-")
+                actual = t.get("actual", t.get("details", t.get("error", "-")))
+
+                # Screenshot button
                 evidence = t.get("evidence", {})
                 test_ss = t.get("screenshot") or (evidence.get("screenshot") if isinstance(evidence, dict) else None)
+                ss_html = ""
                 if test_ss:
                     b64 = self._embed_file(test_ss)
                     ss_src = b64 if b64 else test_ss
                     test_name_clean = t.get("name","").replace('"', '&quot;')
-                    screenshot_cell = f'<button class="ss-link ss-btn" data-src="{ss_src}" data-caption="Bukti Test: {test_name_clean}">SS</button>'
-                else:
-                    screenshot_cell = '<span class="no-ss">-</span>'
-            else:
-                screenshot_cell = '<span class="no-ss">-</span>'
+                    ss_html = f'<div style="margin-top:10px;"><button class="ss-link ss-btn" data-src="{ss_src}" data-caption="Bukti Skenario: {test_name_clean}">Lihat Screenshot Bukti</button></div>'
 
-            # Error details for failed tests
-            details = t.get("details", "") or t.get("error", "")
-            details_html = f'<div class="test-error">{details}</div>' if details and not is_pass else ""
-            status_display = "PASSED" if is_pass else "FAILED"
+                group_html += f'''
+                <div class="test-card">
+                    <div class="test-card-header" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'">
+                        <div class="test-card-title">
+                            <span class="status-badge {status_cls}">{status_display}</span>
+                            <span>#{idx} {t.get("name","")}</span>
+                            {flaky_mark}
+                        </div>
+                        <div class="test-card-meta">
+                            <span class="layer-badge">{t.get("layer","UI").upper()}</span>
+                            <span style="font-size:0.8rem;color:var(--text-secondary)">{format_duration(dur_ms)}</span>
+                        </div>
+                    </div>
+                    <div class="test-card-body" style="display:{'block' if not is_pass else 'none'};">
+                        <div class="test-field"><strong>Steps / Langkah:</strong> {steps_html}</div>
+                        <div class="test-field"><strong>Expected:</strong> <span style="color:var(--success)">{expected}</span></div>
+                        <div class="test-field"><strong>Actual:</strong> <span style="color:{'var(--danger)' if not is_pass else 'var(--text)'}">{actual}</span></div>
+                        <div class="test-field"><strong>Browser:</strong> {t.get("browser","Chromium")} | <strong>Retries:</strong> {t.get("retries", 0)}</div>
+                        {ss_html}
+                    </div>
+                </div>'''
+            return group_html
 
-            test_rows += f'''
-            <tr class="{status_cls}-row">
-                <td>{t.get("name","")}{details_html}</td>
-                <td><span class="layer-badge">{t.get("layer","")}</span></td>
-                <td><span class="status-badge {status_cls}">{status_display}</span>{flaky_mark}</td>
-                <td>{format_duration(dur_ms)}</td>
-                <td>{t.get("browser","Chromium")}</td>
-                <td>{screenshot_cell}</td>
-            </tr>'''
+        test_results_html = ""
+        if happy_tests:
+            test_results_html += _render_html_test_group(happy_tests, "Skenario Happy Path (Positif)")
+        if negative_tests:
+            test_results_html += _render_html_test_group(negative_tests, "Skenario Negative / Boundary / Exception")
+        if not tests:
+            test_results_html = '<p style="color:var(--text-secondary);text-align:center;padding:20px;">Tidak ada test results tercatat.</p>'
 
         # Performance rows with full names + descriptions
         perf_html = ""
@@ -1221,13 +1310,20 @@ class QAReportGenerator:
         .bug-id { font-weight:700; font-family:monospace; }
         .bug-title { font-weight:600; }
 
-        /* Test error details */
-        .test-error { font-size:0.8rem; color:var(--danger); margin-top:4px; font-family:monospace; background:rgba(239,68,68,0.06); padding:4px 8px; border-radius:4px; }
-        .ss-link { display:inline-block; padding:2px 8px; background:var(--accent); color:#fff; border-radius:4px; text-decoration:none; font-size:0.75rem; font-weight:600; border:none; cursor:pointer; }
-        .ss-link:hover { opacity:0.85; }
-        .no-ss { color:var(--text-secondary); }
-        .fail-row { background:rgba(239,68,68,0.03); }
-        [data-theme="dark"] .fail-row { background:rgba(239,68,68,0.08); }
+        /* Test Accordion / Details */
+        .test-card { border:1px solid var(--border); border-radius:8px; margin-bottom:12px; overflow:hidden; background:var(--surface); }
+        .test-card-header { padding:12px 16px; display:flex; align-items:center; justify-content:space-between; gap:12px; cursor:pointer; background:var(--bg); }
+        .test-card-header:hover { background:rgba(0,0,0,0.02); }
+        [data-theme="dark"] .test-card-header:hover { background:rgba(255,255,255,0.02); }
+        .test-card-title { display:flex; align-items:center; gap:8px; font-weight:600; }
+        .test-card-meta { display:flex; align-items:center; gap:8px; }
+        .test-card-body { padding:14px 18px; border-top:1px solid var(--border); font-size:0.9rem; }
+        .test-field { margin-bottom:8px; }
+        .test-field strong { color:var(--text); }
+        .test-field ol { margin-left:20px; margin-top:4px; }
+        .test-field ol li { margin-bottom:2px; }
+        .category-header { font-size:1.1rem; font-weight:700; color:var(--text); margin:20px 0 10px 0; border-bottom:2px solid var(--border); padding-bottom:6px; display:flex; align-items:center; justify-content:space-between; }
+        .category-count { font-size:0.85rem; font-weight:500; color:var(--text-secondary); }
 
         /* Lightbox Modal */
         .lightbox-trigger { cursor: zoom-in; }
@@ -1332,13 +1428,9 @@ class QAReportGenerator:
         </section>
 
         <section class="report-section">
-            <h2>Test Results</h2>
-            <table class="data-table">
-                <thead><tr><th>Test Name</th><th>Layer</th><th>Status</th><th>Duration</th><th>Browser</th><th>Evidence</th></tr></thead>
-                <tbody>
-                    {test_rows if test_rows else '<tr><td colspan="6" style="text-align:center;color:var(--text-secondary)">No test results.</td></tr>'}
-                </tbody>
-            </table>
+            <h2>Skenario Pengujian (Happy Path & Negative Test Breakdown)</h2>
+            <p class="section-desc">Rincian skenario pengujian beserta langkah (Steps), Expected, dan Actual Result.</p>
+            {test_results_html}
         </section>
 
         {perf_html}
@@ -1467,6 +1559,7 @@ if __name__ == "__main__":
             "generated_at": datetime.now().isoformat(),
             "quality_score": 72,
             "summary": {"total": 15, "passed": 11, "failed": 3, "flaky": 1, "duration_ms": 185000},
+            "testing_mode": "e2e",
             "bugs": [
                 {
                     "id": "BUG-001", "severity": "CRITICAL",
@@ -1490,12 +1583,98 @@ if __name__ == "__main__":
                 }
             ],
             "test_results": [
-                {"name": "Login Happy Path", "layer": "UI", "status": "PASS", "duration_ms": 1250, "browser": "Chromium", "retries": 0, "flaky": False, "details": ""},
-                {"name": "Dashboard Load", "layer": "UI", "status": "PASS", "duration_ms": 3400, "browser": "Chromium", "retries": 0, "flaky": False, "details": ""},
-                {"name": "Form Submit Invalid", "layer": "UI", "status": "FAIL", "duration_ms": 2100, "browser": "Chromium", "retries": 2, "flaky": False, "details": "Timeout waiting for error message", "screenshot": ""},
-                {"name": "API GET /users", "layer": "API", "status": "PASS", "duration_ms": 450, "browser": "Chromium", "retries": 0, "flaky": False, "details": ""},
-                {"name": "Cart Checkout Flow", "layer": "UI", "status": "FAIL", "duration_ms": 8200, "browser": "Chromium", "retries": 1, "flaky": False, "details": "Expected price $10.00 but got $0.00"},
-                {"name": "Mobile Responsive Header", "layer": "UI", "status": "PASS", "duration_ms": 1800, "browser": "Chromium", "retries": 0, "flaky": True, "details": ""}
+                {
+                    "name": "Login Berhasil dengan Akun Valid",
+                    "category": "happy_path",
+                    "layer": "UI",
+                    "status": "PASS",
+                    "duration_ms": 1250,
+                    "browser": "Chromium",
+                    "steps": [
+                        "1. Buka halaman login",
+                        "2. Input username 'admin' dan password valid",
+                        "3. Klik tombol Masuk"
+                    ],
+                    "expected": "Berhasil login dan diarahkan ke Dashboard utama",
+                    "actual": "Login berhasil dan Dashboard tampil lengkap",
+                    "retries": 0,
+                    "flaky": False,
+                    "details": ""
+                },
+                {
+                    "name": "Input Data Form Banner Baru",
+                    "category": "happy_path",
+                    "layer": "UI",
+                    "status": "PASS",
+                    "duration_ms": 3400,
+                    "browser": "Chromium",
+                    "steps": [
+                        "1. Buka menu Banner Input",
+                        "2. Klik tombol Tambah Data",
+                        "3. Isi Title, Upload Gambar banner.png, pilih Periode Tanggal",
+                        "4. Klik tombol Simpan"
+                    ],
+                    "expected": "Data banner berhasil tersimpan dan muncul di daftar tabel",
+                    "actual": "Data banner tersimpan dan tabel auto-refresh",
+                    "retries": 0,
+                    "flaky": False,
+                    "details": ""
+                },
+                {
+                    "name": "Submit Form Banner Tanpa Mengisi Field Wajib",
+                    "category": "negative",
+                    "layer": "UI",
+                    "status": "FAIL",
+                    "duration_ms": 2100,
+                    "browser": "Chromium",
+                    "steps": [
+                        "1. Buka modal Tambah Data Banner",
+                        "2. Kosongkan field Title dan File Gambar",
+                        "3. Klik tombol Simpan langsung"
+                    ],
+                    "expected": "Muncul validasi error merah 'Field ini wajib diisi' dan form tidak tersubmit",
+                    "actual": "Form tetap tersubmit dan server mengembalikan error 500",
+                    "retries": 2,
+                    "flaky": False,
+                    "details": "Timeout waiting for validation message",
+                    "screenshot": ""
+                },
+                {
+                    "name": "API GET /api/v1/banners Endpoint Validation",
+                    "category": "happy_path",
+                    "layer": "API",
+                    "status": "PASS",
+                    "duration_ms": 450,
+                    "browser": "Chromium",
+                    "steps": [
+                        "1. Kirim request HTTP GET /api/v1/banners dengan bearer token",
+                        "2. Validasi response code dan schema data"
+                    ],
+                    "expected": "HTTP 200 OK dengan format JSON schema valid",
+                    "actual": "HTTP 200 OK diterima dalam 450ms",
+                    "retries": 0,
+                    "flaky": False,
+                    "details": ""
+                },
+                {
+                    "name": "Upload File Gambar Ekstensi Tidak Didukung (.exe)",
+                    "category": "negative",
+                    "layer": "UI",
+                    "status": "FAIL",
+                    "duration_ms": 1800,
+                    "browser": "Chromium",
+                    "steps": [
+                        "1. Buka form upload gambar banner",
+                        "2. Pilih file payload.exe",
+                        "3. Klik tombol Upload"
+                    ],
+                    "expected": "Ditolak oleh client-side validator: 'Hanya file JPG/PNG diperbolehkan'",
+                    "actual": "File .exe lolos dan berhasil terupload ke server",
+                    "retries": 1,
+                    "flaky": False,
+                    "details": "Client validator bypassed",
+                    "screenshot": ""
+                }
             ],
             "performance": {
                 "LCP": {"value": 2300, "unit": "ms", "rating": "good"},

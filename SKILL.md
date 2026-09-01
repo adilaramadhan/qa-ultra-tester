@@ -520,10 +520,18 @@ Skill ini diaktifkan oleh **3 trigger utama**. Setiap trigger menentukan layer m
   "test_results": [
     {
       "name": "string",
+      "category": "happy_path|negative|boundary|security|api|a11y",
       "layer": "UI|API|A11Y|PERF|SECURITY|CHAOS",
       "status": "PASS|FAIL",
       "duration_ms": 0,
       "browser": "Chromium|Firefox|WebKit",
+      "steps": [
+        "1. Buka halaman target",
+        "2. Input data valid pada form",
+        "3. Klik tombol Submit"
+      ],
+      "expected": "Form berhasil disimpan dan muncul notifikasi sukses",
+      "actual": "Form tersimpan dan dialihkan ke halaman list",
       "retries": 0,
       "flaky": false,
       "details": "string",
