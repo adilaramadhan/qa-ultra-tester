@@ -31,15 +31,19 @@ except ImportError:
 
 # ── Performance metric descriptions ──────────────────────────
 METRIC_INFO = {
-    "LCP": {"full": "Largest Contentful Paint", "desc": "Waktu render elemen terbesar yang terlihat di viewport. Target: < 2.5s"},
-    "FID": {"full": "First Input Delay", "desc": "Waktu dari interaksi pertama user sampai browser mulai proses. Target: < 100ms"},
-    "CLS": {"full": "Cumulative Layout Shift", "desc": "Skor stabilitas visual layout halaman. Target: < 0.1"},
-    "TTFB": {"full": "Time to First Byte", "desc": "Waktu dari request sampai byte pertama response diterima. Target: < 800ms"},
-    "FCP": {"full": "First Contentful Paint", "desc": "Waktu render konten pertama (teks/gambar) di layar. Target: < 1.8s"},
-    "INP": {"full": "Interaction to Next Paint", "desc": "Latensi terburuk dari semua interaksi user selama halaman terbuka. Target: < 200ms"},
-    "TBT": {"full": "Total Blocking Time", "desc": "Total waktu main thread ter-blok antara FCP dan Time to Interactive. Target: < 200ms"},
-    "SI": {"full": "Speed Index", "desc": "Seberapa cepat konten terlihat selama page load. Target: < 3.4s"},
-    "TTI": {"full": "Time to Interactive", "desc": "Waktu sampai halaman fully interactive. Target: < 3.8s"},
+    "LCP": {"full": "Largest Contentful Paint", "desc": "Waktu render elemen konten utama/terbesar (gambar/banner/teks) di viewport. Target standar: < 2.5 detik (Good), 2.5s - 4.0s (Needs Improvement), > 4.0s (Poor)."},
+    "FID": {"full": "First Input Delay", "desc": "Waktu respon dari klik/interaksi pertama pengguna hingga browser mulai memproses event. Target standar: < 100ms (Good), 100ms - 300ms (Needs Improvement), > 300ms (Poor)."},
+    "CLS": {"full": "Cumulative Layout Shift", "desc": "Skor stabilitas pergeseran elemen visual yang tidak terduga saat halaman sedang dimuat. Target standar: < 0.1 (Good), 0.1 - 0.25 (Needs Improvement), > 0.25 (Poor)."},
+    "TTFB": {"full": "Time to First Byte", "desc": "Durasi waktu dari pengiriman request HTTP sampai byte data pertama diterima dari server/backend. Target standar: < 800ms (Good), > 1800ms (Poor)."},
+    "FCP": {"full": "First Contentful Paint", "desc": "Waktu saat elemen konten pertama (teks, gambar latar, canvas) mulai terlihat di layar pengguna. Target standar: < 1.8 detik (Good), 1.8s - 3.0s (Needs Improvement)."},
+    "INP": {"full": "Interaction to Next Paint", "desc": "Mengukur latensi keseluruhan respon UI terhadap semua interaksi pengguna (klik, ketik, tap) di halaman. Target standar: < 200ms (Good)."},
+    "TBT": {"full": "Total Blocking Time", "desc": "Total durasi waktu main thread browser terhalang/freeze antara FCP dan Time to Interactive. Target standar: < 200ms (Good)."},
+    "SI": {"full": "Speed Index", "desc": "Indeks kecepatan visual seberapa cepat seluruh konten di atas lipatan layar tampil lengkap. Target standar: < 3.4 detik (Good)."},
+    "TTI": {"full": "Time to Interactive", "desc": "Waktu yang dibutuhkan hingga halaman benar-benar siap dan responsif menerima input pengguna. Target standar: < 3.8 detik (Good)."},
+    "PAGE LOAD": {"full": "Full Page Load Time", "desc": "Total waktu dari navigasi awal hingga seluruh resource, script, dan asset halaman selesai dimuat sepenuhnya. Target standar: < 3.0 detik."},
+    "AVG RESPONSE TIME": {"full": "Average Response Time", "desc": "Rata-rata waktu pemrosesan permintaan API/layanan backend dari client hingga selesai. Target standar: < 500ms."},
+    "P95 LATENCY": {"full": "95th Percentile Latency", "desc": "Batas latensi di mana 95% dari seluruh request selesai di bawah waktu ini. Target standar: < 1000ms."},
+    "THROUGHPUT": {"full": "API Throughput / Request per Second", "desc": "Jumlah request per detik (RPS) yang berhasil dilayani secara concurrent tanpa kegagalan."},
 }
 
 
@@ -575,14 +579,29 @@ class QAReportGenerator:
 
             # Section 3: Performance Core Web Vitals
             if perf:
-                add_h1("3. Metrik Performa (Core Web Vitals)")
+                add_h1("3. Metrik Performa (Core Web Vitals & Kecepatan Akses)")
+                p_perf = doc.add_paragraph("Evaluasi performa halaman sesuai standar industri Google Core Web Vitals untuk memastikan kelancaran loading dan responsivitas interaksi pengguna:")
+                p_perf.paragraph_format.space_after = Pt(4)
+
                 perf_items = []
                 for key, val in perf.items():
-                    metric_key = key.replace("_ms", "").replace("_", " ").upper()
-                    key_map = {"PAGE LOAD MS": "Page Load", "TTFB MS": "TTFB", "FCP MS": "FCP", "LCP MS": "LCP", "CLS": "CLS"}
-                    display_key = key_map.get(metric_key, key)
-                    info = METRIC_INFO.get(display_key, {})
-                    full_name = info.get("full", display_key)
+                    metric_clean = key.replace("_ms", "").replace("_", " ").strip().upper()
+                    key_map = {
+                        "PAGE LOAD MS": "PAGE LOAD",
+                        "PAGE LOAD": "PAGE LOAD",
+                        "TTFB MS": "TTFB",
+                        "FCP MS": "FCP",
+                        "LCP MS": "LCP",
+                        "CLS": "CLS",
+                        "FID": "FID",
+                        "INP": "INP",
+                        "TBT": "TBT"
+                    }
+                    display_key = key_map.get(metric_clean, metric_clean)
+                    info = METRIC_INFO.get(display_key, METRIC_INFO.get(metric_clean, {}))
+                    full_name = info.get("full", key)
+                    desc_text = info.get("desc", "")
+                    
                     if isinstance(val, dict):
                         val_text = f'{val.get("value","")}{val.get("unit","")}'
                         rating = val.get("rating", "")
@@ -592,17 +611,42 @@ class QAReportGenerator:
                     else:
                         val_text = str(val)
                         rating = ""
-                    perf_items.append((display_key, full_name, val_text, rating))
+                    perf_items.append((display_key, full_name, desc_text, val_text, rating))
 
                 perf_tbl = doc.add_table(rows=len(perf_items) + 1, cols=4)
                 perf_tbl.style = 'Table Grid'
                 auto_width(perf_tbl)
-                add_header_row(perf_tbl, ["Metrik", "Nama Lengkap", "Nilai", "Rating"])
-                for idx, (metric, full, val_t, rating) in enumerate(perf_items, 1):
-                    set_cell_text(perf_tbl.rows[idx].cells[0], metric, bold=True)
-                    set_cell_text(perf_tbl.rows[idx].cells[1], full)
-                    set_cell_text(perf_tbl.rows[idx].cells[2], val_t, align=WD_ALIGN_PARAGRAPH.CENTER)
-                    set_cell_text(perf_tbl.rows[idx].cells[3], rating.title() if rating else "-", align=WD_ALIGN_PARAGRAPH.CENTER)
+                add_header_row(perf_tbl, ["Metrik & Penjelasan", "Nama Standar", "Nilai Uji", "Rating Kelayakan"])
+                for idx, (metric, full, desc, val_t, rating) in enumerate(perf_items, 1):
+                    if idx % 2 == 0:
+                        for cell in perf_tbl.rows[idx].cells: set_cell_shading(cell, INFO_LABEL_BG)
+                    
+                    # Cell 0: Metric + Deskripsi
+                    c0 = perf_tbl.rows[idx].cells[0]
+                    c0.text = ""
+                    p0 = c0.paragraphs[0]
+                    p0.paragraph_format.space_before = Pt(2)
+                    p0.paragraph_format.space_after = Pt(1)
+                    r_m = p0.add_run(metric)
+                    r_m.bold = True
+                    r_m.font.name = font_family
+                    r_m.font.size = Pt(10)
+                    if desc:
+                        p0_sub = c0.add_paragraph()
+                        p0_sub.paragraph_format.space_before = Pt(0)
+                        p0_sub.paragraph_format.space_after = Pt(2)
+                        r_d = p0_sub.add_run(desc)
+                        r_d.italic = True
+                        r_d.font.name = font_family
+                        r_d.font.size = Pt(8.5)
+                        r_d.font.color.rgb = RGBColor(0x55, 0x55, 0x55)
+
+                    set_cell_text(perf_tbl.rows[idx].cells[1], full, size=9.5)
+                    set_cell_text(perf_tbl.rows[idx].cells[2], val_t, bold=True, align=WD_ALIGN_PARAGRAPH.CENTER, size=10)
+                    
+                    r_col = TEXT_GREEN if rating.lower() in ["good", "optimal", "pass"] else (TEXT_ORANGE if rating.lower() in ["needs_improvement", "warning"] else (TEXT_RED if rating.lower() in ["poor", "bad", "fail"] else None))
+                    set_cell_text(perf_tbl.rows[idx].cells[3], rating.replace("_", " ").title() if rating else "-", bold=True if r_col else False, color=r_col, align=WD_ALIGN_PARAGRAPH.CENTER, size=9.5)
+                doc.add_paragraph('')
 
             # Section 4: Accessibility
             if a11y:
@@ -1324,8 +1368,21 @@ class QAReportGenerator:
         if perf:
             perf_rows = ""
             for metric, val in perf.items():
-                info = METRIC_INFO.get(metric, {})
-                full_name = info.get("full", metric)
+                metric_clean = metric.replace("_ms", "").replace("_", " ").strip().upper()
+                key_map = {
+                    "PAGE LOAD MS": "PAGE LOAD",
+                    "PAGE LOAD": "PAGE LOAD",
+                    "TTFB MS": "TTFB",
+                    "FCP MS": "FCP",
+                    "LCP MS": "LCP",
+                    "CLS": "CLS",
+                    "FID": "FID",
+                    "INP": "INP",
+                    "TBT": "TBT"
+                }
+                display_key = key_map.get(metric_clean, metric_clean)
+                info = METRIC_INFO.get(display_key, METRIC_INFO.get(metric_clean, {}))
+                full_name = info.get("full", display_key)
                 desc = info.get("desc", "")
                 if isinstance(val, dict):
                     v = val.get("value", "")
@@ -1339,20 +1396,20 @@ class QAReportGenerator:
                 perf_rows += f'''
                 <tr>
                     <td>
-                        <strong>{metric}</strong>
-                        <div class="metric-fullname">{full_name}</div>
-                        <div class="metric-desc">{desc}</div>
+                        <strong style="color:var(--text); font-size:0.95rem;">{display_key}</strong>
+                        <div class="metric-fullname" style="font-weight:600; color:var(--primary); margin-top:2px;">{full_name}</div>
+                        <div class="metric-desc" style="margin-top:4px; line-height:1.4; color:var(--text-secondary);">{desc}</div>
                     </td>
-                    <td>{v}{u}</td>
+                    <td style="font-weight:700; font-size:1rem; white-space:nowrap;">{v}{u}</td>
                     <td><div class="perf-bar"><div class="perf-fill {r}" style="width:{bar_pct}%"></div></div></td>
                     <td><span class="rating-badge {r}">{r.replace("_"," ").title()}</span></td>
                 </tr>'''
             perf_html = f'''
             <section class="report-section">
-                <h2>Performance (Core Web Vitals)</h2>
-                <p class="section-desc">Metrik performa sesuai standar Google Core Web Vitals</p>
+                <h2>Performance (Core Web Vitals & Kecepatan Akses)</h2>
+                <p class="section-desc">Pengukuran metrik kecepatan muat, responsivitas, dan stabilitas visual sesuai standar industri Google Web Vitals.</p>
                 <table class="data-table">
-                    <thead><tr><th>Metric</th><th>Value</th><th>Bar</th><th>Rating</th></tr></thead>
+                    <thead><tr><th style="width:50%;">Metrik & Deskripsi Penjelasan</th><th style="width:15%;">Nilai Uji</th><th style="width:20%;">Indikator</th><th style="width:15%;">Rating</th></tr></thead>
                     <tbody>{perf_rows}</tbody>
                 </table>
             </section>'''
