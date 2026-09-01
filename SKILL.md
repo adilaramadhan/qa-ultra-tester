@@ -484,6 +484,7 @@ Skill ini diaktifkan oleh **3 trigger utama**. Setiap trigger menentukan layer m
 ```json
 {
   "project_name": "string",
+  "testing_mode": "e2e|bug_hunter|api",
   "target_url": "string",
   "test_date": "YYYY-MM-DD",
   "tester": "string",
