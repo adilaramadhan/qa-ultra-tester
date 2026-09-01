@@ -1053,9 +1053,11 @@ class QAReportGenerator:
         bug_html = ""
         for bug in bugs:
             sev = bug.get("severity", "MEDIUM")
+            priority = bug.get("priority", "P2")
+            bug_type = bug.get("type", "Functional")
             steps = bug.get("steps", [])
-            # Strip leading numbers to prevent double numbering with <ol>
             steps_html = "".join(f"<li>{strip_step_number(s)}</li>" for s in steps) if steps else "<li>N/A</li>"
+            
             # Evidence screenshot extraction - handle string, dict, or direct field
             evidence = bug.get("evidence", "")
             screenshot = None
@@ -1091,13 +1093,14 @@ class QAReportGenerator:
                     <span class="severity-badge {sev.lower()}">{sev}</span>
                     <span class="bug-id">{bug.get("id","")}</span>
                     <span class="bug-title">{bug.get("title","")}</span>
+                    <span class="layer-badge" style="margin-left:auto; font-size:0.75rem;">Priority: {priority} | {bug_type}</span>
                 </div>
                 <div class="bug-body">
-                    <div class="bug-field"><strong>Location:</strong> {bug.get("location","")}</div>
-                    <div class="bug-field"><strong>Steps to Reproduce:</strong><ol>{steps_html}</ol></div>
-                    <div class="bug-field"><strong>Actual:</strong> {bug.get("actual","")}</div>
-                    <div class="bug-field"><strong>Expected:</strong> {bug.get("expected","")}</div>
-                    <div class="bug-field"><strong>Recommendation:</strong> {bug.get("recommendation","")}</div>
+                    <div class="bug-field"><strong>Lokasi / URL:</strong> <code>{bug.get("location","")}</code></div>
+                    <div class="bug-field"><strong>Langkah Reproduksi (Steps):</strong><ol>{steps_html}</ol></div>
+                    <div class="bug-field"><strong>Kondisi Aktual (Actual):</strong> <span style="color:var(--danger)">{bug.get("actual","")}</span></div>
+                    <div class="bug-field"><strong>Kondisi Harapan (Expected):</strong> <span style="color:var(--success)">{bug.get("expected","")}</span></div>
+                    <div class="bug-field"><strong>Rekomendasi Solusi:</strong> <span style="color:var(--accent); font-weight:500;">{bug.get("recommendation","")}</span></div>
                     {media_html}
                 </div>
             </div>'''
@@ -1544,13 +1547,25 @@ class QAReportGenerator:
 ''')
 
         # Header section with dynamic data
+        mode = self.data.get("testing_mode", "e2e").lower()
+        mode_titles = {
+            "e2e": "E2E Comprehensive Test Report",
+            "bug_hunter": "Bug Hunter & Defect Audit Report",
+            "api": "API & Service Integration Test Report"
+        }
+        report_title = mode_titles.get(mode, "QA Test Report")
+        mode_badge = mode.upper().replace("_", " ")
+
         html_parts.append(f'''        <header class="report-header">
             <button class="theme-toggle" id="themeBtn">Dark / Light</button>
-            <h1 style="margin-bottom:8px;">QA Test Report</h1>
+            <div style="display:flex; align-items:center; gap:10px; margin-bottom:6px;">
+                <span class="status-badge" style="background:rgba(255,255,255,0.2); color:#fff; font-size:0.75rem; border:1px solid rgba(255,255,255,0.3);">{mode_badge}</span>
+            </div>
+            <h1 style="margin-bottom:8px;">{report_title}</h1>
             <div class="meta">
-                <span>Project: {self.data.get("project_name","N/A")}</span>
-                <span>Target: {self.data.get("target_url","N/A")}</span>
-                <span>Generated: {self.data.get("generated_at", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))}</span>
+                <span><strong>Project:</strong> {self.data.get("project_name","N/A")}</span>
+                <span><strong>Target:</strong> {self.data.get("target_url","N/A")}</span>
+                <span><strong>Generated:</strong> {self.data.get("generated_at", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))}</span>
             </div>
             <div class="readiness {readiness_class}">Production: {readiness}</div>
         </header>
