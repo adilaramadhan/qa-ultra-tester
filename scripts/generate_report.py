@@ -229,7 +229,6 @@ class QAReportGenerator:
             2: {"name": "High", "bg": "FDF0E3", "text_col": TEXT_ORANGE},
             3: {"name": "Medium", "bg": "FEF7DA", "text_col": TEXT_YELLOW},
             4: {"name": "Low", "bg": "E8F1FB", "text_col": TEXT_BLUE},
-            5: {"name": "Low", "bg": "E7F6EC", "text_col": TEXT_GREEN},
         }
 
         def get_sev_num(sev_val):
@@ -237,8 +236,7 @@ class QAReportGenerator:
             if s in ["1", "critical", "crit", "blocker"]: return 1
             if s in ["2", "high"]: return 2
             if s in ["3", "medium", "med"]: return 3
-            if s in ["4", "low"]: return 4
-            if s in ["5", "trivial", "cosmetic", "info"]: return 5
+            if s in ["4", "5", "low", "trivial", "cosmetic", "info"]: return 4
             return 3
 
         # ── Logo Discovery ──
@@ -589,20 +587,20 @@ class QAReportGenerator:
             # 1. Ringkasan Eksekutif
             add_h1("1. Ringkasan Eksekutif")
             sev_desc_parts = []
-            for n in range(1, 6):
+            for n in range(1, 5):
                 if sev_counts[n] > 0:
                     sev_desc_parts.append(f"{sev_counts[n]} {SEV_THEME[n]['name']}")
             sev_narrative = f" Ditemukan {len(bugs)} temuan ({', '.join(sev_desc_parts)})." if bugs else " Tidak ditemukan defect/bug."
             p = doc.add_paragraph(f"Audit Bug Hunting telah selesai dieksekusi pada fitur {project}.{sev_narrative}")
             p.paragraph_format.space_after = Pt(6)
 
-            # 2. Statistik Temuan (Severity 1–5)
-            add_h1("2. Statistik Temuan (Severity 1–5)")
-            sev_tbl = doc.add_table(rows=6, cols=3)
+            # 2. Statistik Temuan (Severity 1–4)
+            add_h1("2. Statistik Temuan (Severity 1–4)")
+            sev_tbl = doc.add_table(rows=5, cols=3)
             sev_tbl.style = 'Table Grid'
             auto_width(sev_tbl)
             add_header_row(sev_tbl, ["Severity", "Keterangan", "Jumlah"])
-            for n in range(1, 6):
+            for n in range(1, 5):
                 theme = SEV_THEME[n]
                 set_cell_shading(sev_tbl.rows[n].cells[0], theme["bg"])
                 set_cell_text(sev_tbl.rows[n].cells[0], str(n), bold=True, color=theme["text_col"], align=WD_ALIGN_PARAGRAPH.CENTER)
@@ -634,47 +632,67 @@ class QAReportGenerator:
                     b_title = bug.get("title", "")
                     add_h2(f"{b_id} – {b_title}")
 
-                    meta_p = doc.add_paragraph()
-                    r_sev_lbl = meta_p.add_run("Severity: ")
-                    r_sev_lbl.bold = True
-                    r_sev_val = meta_p.add_run(theme["name"])
-                    r_sev_val.bold = True
-                    r_sev_val.font.color.rgb = theme["text_col"]
-                    r_pri_lbl = meta_p.add_run(f"   •   Priority: {bug.get('priority', '-')}   •   Lokasi: {bug.get('location', '-')}   •   Tipe: {bug.get('type', '-')}")
-                    r_pri_lbl.font.color.rgb = RGBColor(0x55, 0x55, 0x55)
+                    # Structured Table for Bug Details
+                    detail_tbl = doc.add_table(rows=6, cols=2)
+                    detail_tbl.style = 'Table Grid'
+                    auto_width(detail_tbl)
 
+                    # Row 0: Severity & Priority
+                    set_cell_shading(detail_tbl.rows[0].cells[0], INFO_LABEL_BG)
+                    set_cell_text(detail_tbl.rows[0].cells[0], "Severity / Priority", bold=True, size=10)
+                    p_meta = detail_tbl.rows[0].cells[1].paragraphs[0]
+                    p_meta.paragraph_format.space_before = Pt(2)
+                    p_meta.paragraph_format.space_after = Pt(2)
+                    r_s = p_meta.add_run(f"Severity {s_num} ({theme['name']})")
+                    r_s.bold = True
+                    r_s.font.color.rgb = theme["text_col"]
+                    r_s.font.name = font_family
+                    r_s.font.size = Pt(10)
+                    r_p = p_meta.add_run(f"   |   Priority: {bug.get('priority', '-')}   |   Tipe: {bug.get('type', '-')}")
+                    r_p.font.name = font_family
+                    r_p.font.size = Pt(10)
+
+                    # Row 1: Lokasi
+                    set_cell_shading(detail_tbl.rows[1].cells[0], INFO_LABEL_BG)
+                    set_cell_text(detail_tbl.rows[1].cells[0], "Lokasi / Endpoint", bold=True, size=10)
+                    set_cell_text(detail_tbl.rows[1].cells[1], bug.get("location", target), size=10)
+
+                    # Row 2: Langkah Reproduksi
+                    set_cell_shading(detail_tbl.rows[2].cells[0], INFO_LABEL_BG)
+                    set_cell_text(detail_tbl.rows[2].cells[0], "Langkah Reproduksi", bold=True, size=10)
                     steps = bug.get("steps", [])
+                    c_step = detail_tbl.rows[2].cells[1]
+                    c_step.text = ""
                     if steps:
-                        sp = doc.add_paragraph()
-                        r_st = sp.add_run("Langkah Reproduksi:")
-                        r_st.bold = True
-                        r_st.font.color.rgb = BRAND_NAVY
                         for idx_s, step in enumerate(steps, 1):
                             clean = strip_step_number(step)
-                            step_p = doc.add_paragraph()
-                            r_num = step_p.add_run(f"{idx_s}. ")
-                            r_num.bold = True
-                            step_p.add_run(clean)
+                            p_st = c_step.paragraphs[0] if idx_s == 1 else c_step.add_paragraph()
+                            p_st.paragraph_format.space_before = Pt(1)
+                            p_st.paragraph_format.space_after = Pt(1)
+                            r_n = p_st.add_run(f"{idx_s}. ")
+                            r_n.bold = True
+                            r_n.font.name = font_family
+                            r_n.font.size = Pt(10)
+                            r_txt = p_st.add_run(clean)
+                            r_txt.font.name = font_family
+                            r_txt.font.size = Pt(10)
+                    else:
+                        set_cell_text(c_step, "-", size=10)
 
-                    p_act = doc.add_paragraph()
-                    r_act = p_act.add_run("Hasil Aktual: ")
-                    r_act.bold = True
-                    r_act.font.color.rgb = TEXT_RED
-                    p_act.add_run(bug.get("actual", ""))
+                    # Row 3: Hasil Aktual
+                    set_cell_shading(detail_tbl.rows[3].cells[0], INFO_LABEL_BG)
+                    set_cell_text(detail_tbl.rows[3].cells[0], "Hasil Aktual", bold=True, size=10)
+                    set_cell_text(detail_tbl.rows[3].cells[1], bug.get("actual", "-"), color=TEXT_RED, size=10)
 
-                    p_exp = doc.add_paragraph()
-                    r_exp = p_exp.add_run("Hasil Diharapkan: ")
-                    r_exp.bold = True
-                    r_exp.font.color.rgb = TEXT_GREEN
-                    p_exp.add_run(bug.get("expected", ""))
+                    # Row 4: Hasil Diharapkan
+                    set_cell_shading(detail_tbl.rows[4].cells[0], INFO_LABEL_BG)
+                    set_cell_text(detail_tbl.rows[4].cells[0], "Hasil Diharapkan", bold=True, size=10)
+                    set_cell_text(detail_tbl.rows[4].cells[1], bug.get("expected", "-"), color=TEXT_GREEN, size=10)
 
-                    rec = bug.get("recommendation", "")
-                    if rec:
-                        p_rec = doc.add_paragraph()
-                        r_rec = p_rec.add_run("Rekomendasi Perbaikan: ")
-                        r_rec.bold = True
-                        r_rec.font.color.rgb = BRAND_NAVY
-                        p_rec.add_run(rec)
+                    # Row 5: Rekomendasi
+                    set_cell_shading(detail_tbl.rows[5].cells[0], INFO_LABEL_BG)
+                    set_cell_text(detail_tbl.rows[5].cells[0], "Rekomendasi", bold=True, size=10)
+                    set_cell_text(detail_tbl.rows[5].cells[1], bug.get("recommendation", "-"), bold=True, color=BRAND_NAVY, size=10)
 
                     evidence = bug.get("evidence", "")
                     screenshot = evidence if isinstance(evidence, str) else ""
