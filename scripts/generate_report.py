@@ -592,6 +592,50 @@ class QAReportGenerator:
                     set_cell_text(card_tbl.rows[4].cells[0], "Layer / Browser", bold=True, size=9)
                     set_cell_text(card_tbl.rows[4].cells[1], f"{test.get('layer', 'UI').upper()} | {test.get('browser', 'Chromium')}", size=9)
 
+                    # Embed Screenshot bukti gagal jika skenario FAILED
+                    if not is_pass:
+                        ss_file = test.get("screenshot") or ""
+                        if isinstance(test.get("evidence"), dict):
+                            ss_file = ss_file or test["evidence"].get("screenshot", "")
+                        
+                        ss_path = None
+                        if ss_file:
+                            candidates = [
+                                Path(ss_file),
+                                self.output_dir / ss_file,
+                                self.output_dir / "screenshots" / Path(ss_file).name,
+                                self.output_dir.parent / ss_file,
+                            ]
+                            for cand in candidates:
+                                if cand.exists() and cand.is_file():
+                                    ss_path = cand
+                                    break
+                        
+                        # Fallback: cari di folder screenshots jika belum ketemu path spesifik
+                        if not ss_path and (self.output_dir / "screenshots").exists():
+                            for ext in ["*.png", "*.jpg", "*.jpeg"]:
+                                for f in (self.output_dir / "screenshots").glob(ext):
+                                    if "fail" in f.name.lower() or "bug" in f.name.lower() or f.stem.lower() in test.get("name", "").lower():
+                                        ss_path = f
+                                        break
+                                if ss_path:
+                                    break
+
+                        if ss_path and ss_path.exists():
+                            try:
+                                doc.add_paragraph('')
+                                doc.add_picture(str(ss_path), width=Inches(5.0))
+                                doc.paragraphs[-1].alignment = WD_ALIGN_PARAGRAPH.CENTER
+                                cap = doc.add_paragraph()
+                                cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                                r_cap = cap.add_run(f"Bukti Tangkapan Layar Gagal – Skenario #{idx}: {test.get('name', '')}")
+                                r_cap.font.name = font_family
+                                r_cap.font.size = Pt(8.5)
+                                r_cap.italic = True
+                                r_cap.font.color.rgb = TEXT_RED
+                            except Exception:
+                                pass
+
                     doc.add_paragraph('').paragraph_format.space_after = Pt(4)
 
                 return start_num + len(test_list)
@@ -1123,13 +1167,14 @@ class QAReportGenerator:
                     doc.add_paragraph('')
 
         # ── COMMON FOOTER: BUKTI VISUAL (Gallery) ─────────────────
+        # Catatan: Mode bug_hunter embed langsung di kartu bug, mode e2e embed langsung di bawah skenario gagal.
         ss_dir = self.output_dir / "screenshots"
         screenshots = []
         if ss_dir.exists():
             for ext in ["*.png", "*.jpg", "*.jpeg"]:
                 screenshots.extend(sorted(ss_dir.glob(ext)))
 
-        if screenshots and mode != "bug_hunter":  # Bug hunter already embeds inside bug items
+        if screenshots and mode not in ["bug_hunter", "e2e"]:  # Only show gallery in modes that don't inline evidence
             # Map screenshots to tests / bugs for richer descriptions
             ss_map = {}
             for t in tests:
