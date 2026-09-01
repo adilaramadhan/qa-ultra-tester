@@ -556,18 +556,52 @@ class QAReportGenerator:
 
             # Section 4: Accessibility
             if a11y:
-                add_h1("4. Aksesibilitas (WCAG 2.1 AA)")
+                add_h1("4. Aksesibilitas & Kenyamanan Pengguna (WCAG 2.1 AA)")
+                p_a11y = doc.add_paragraph("Pemeriksaan terhadap standar kenyamanan antarmuka web (kemudahan membaca teks, kontras warna, label form, dan aksesibilitas):")
+                p_a11y.paragraph_format.space_after = Pt(4)
+                
                 a11y_tbl = doc.add_table(rows=len(a11y) + 1, cols=4)
                 a11y_tbl.style = 'Table Grid'
                 auto_width(a11y_tbl)
-                add_header_row(a11y_tbl, ["Rule / Tipe", "Dampak", "Elemen", "Deskripsi"])
+                add_header_row(a11y_tbl, ["Dampak", "Jenis Temuan & Penjelasan", "Elemen UI", "Standar Acuan"])
                 for idx, issue in enumerate(a11y, 1):
-                    impact = issue.get("impact", issue.get("severity", "")).lower()
+                    impact = issue.get("impact", issue.get("severity", "moderate")).lower()
                     impact_color = TEXT_RED if impact in ["critical", "serious"] else (TEXT_ORANGE if impact == "moderate" else None)
-                    set_cell_text(a11y_tbl.rows[idx].cells[0], issue.get("rule", "-"))
-                    set_cell_text(a11y_tbl.rows[idx].cells[1], impact.capitalize(), color=impact_color, bold=True)
-                    set_cell_text(a11y_tbl.rows[idx].cells[2], issue.get("element", "-"))
-                    set_cell_text(a11y_tbl.rows[idx].cells[3], issue.get("description", ""))
+                    rule = issue.get("type", issue.get("rule", "Aksesibilitas UI"))
+                    desc = issue.get("description", "")
+                    wcag_raw = issue.get("wcag", "")
+
+                    wcag_map = {
+                        "1.1.1": "1.1.1 Non-text Content (Teks Alternatif Gambar)",
+                        "1.3.1": "1.3.1 Info & Relationships (Struktur Form & Label)",
+                        "1.4.3": "1.4.3 Contrast Minimum (Kontras Warna Teks)",
+                        "2.1.1": "2.1.1 Keyboard Accessible (Akses Tombol/Keyboard)",
+                        "2.4.7": "2.4.7 Focus Visible (Indikator Fokus Terlihat)",
+                        "3.3.2": "3.3.2 Labels or Instructions (Petunjuk Pengisian)"
+                    }
+                    wcag_friendly = wcag_raw
+                    for k, v in wcag_map.items():
+                        if k in wcag_raw:
+                            wcag_friendly = f"WCAG 2.1 AA — {v}"
+                            break
+
+                    set_cell_text(a11y_tbl.rows[idx].cells[0], impact.upper(), color=impact_color, bold=True, align=WD_ALIGN_PARAGRAPH.CENTER)
+                    
+                    # Cell 1: Rule + Desc
+                    c_desc = a11y_tbl.rows[idx].cells[1]
+                    c_desc.text = ""
+                    p1 = c_desc.paragraphs[0]
+                    r_r = p1.add_run(f"{rule}\n")
+                    r_r.bold = True
+                    r_r.font.name = font_family
+                    r_r.font.size = Pt(9.5)
+                    r_d = p1.add_run(desc)
+                    r_d.font.name = font_family
+                    r_d.font.size = Pt(9)
+                    r_d.font.color.rgb = RGBColor(0x44, 0x44, 0x44)
+
+                    set_cell_text(a11y_tbl.rows[idx].cells[2], issue.get("element", "-"), size=9)
+                    set_cell_text(a11y_tbl.rows[idx].cells[3], wcag_friendly, bold=True, color=BRAND_NAVY, size=9)
 
             # Section 5: Daftar Defect jika ada
             if bugs:
@@ -1181,19 +1215,53 @@ class QAReportGenerator:
         if a11y:
             a11y_rows = ""
             for issue in a11y:
-                sev = issue.get("severity", "moderate")
+                sev = issue.get("severity", "moderate").lower()
+                desc = issue.get("description", "")
+                rule = issue.get("type", issue.get("rule", "Aksesibilitas UI"))
+                wcag_raw = issue.get("wcag", "")
+
+                # Friendly WCAG explanations
+                wcag_map = {
+                    "1.1.1": "1.1.1 Non-text Content (Teks Alternatif Gambar)",
+                    "1.3.1": "1.3.1 Info & Relationships (Struktur Form & Label)",
+                    "1.4.3": "1.4.3 Contrast Minimum (Kontras Warna Teks)",
+                    "2.1.1": "2.1.1 Keyboard Accessible (Akses Tombol/Keyboard)",
+                    "2.4.7": "2.4.7 Focus Visible (Indikator Fokus Terlihat)",
+                    "3.3.2": "3.3.2 Labels or Instructions (Petunjuk Pengisian)"
+                }
+                wcag_friendly = wcag_raw
+                for k, v in wcag_map.items():
+                    if k in wcag_raw:
+                        wcag_friendly = f"WCAG 2.1 AA — {v}"
+                        break
+                if not wcag_friendly or wcag_friendly == wcag_raw:
+                    wcag_friendly = f"WCAG 2.1 AA — {wcag_raw}" if wcag_raw else "WCAG 2.1 AA (Standar Aksesibilitas)"
+
+                # Friendly description elaboration
+                friendly_desc = desc
+                if "lacks explicit aria-label" in desc.lower() or "form label missing" in rule.lower():
+                    friendly_desc = f"<strong>Input form belum memiliki label/teks pembaca layar:</strong> {desc}"
+                elif "contrast ratio is below" in desc.lower() or "color contrast" in rule.lower():
+                    friendly_desc = f"<strong>Kontras warna teks terlalu redup sehingga sulit dibaca pengguna:</strong> {desc}"
+
                 a11y_rows += f'''
                 <tr>
-                    <td><span class="severity-badge {sev}">{sev.upper()}</span></td>
-                    <td>{issue.get("description","")}</td>
-                    <td><code>{issue.get("element","")}</code></td>
-                    <td>{issue.get("wcag","")}</td>
+                    <td style="white-space:nowrap;"><span class="severity-badge {sev}">{sev.upper()}</span></td>
+                    <td>
+                        <div style="font-weight:600; color:var(--text); margin-bottom:3px;">{rule}</div>
+                        <div style="font-size:0.85rem; color:var(--text-secondary); line-height:1.4;">{friendly_desc}</div>
+                    </td>
+                    <td><code style="font-size:0.8rem; background:var(--bg); padding:3px 6px; border-radius:4px; border:1px solid var(--border);">{issue.get("element","")}</code></td>
+                    <td>
+                        <div style="font-size:0.85rem; font-weight:600; color:var(--accent);">{wcag_friendly}</div>
+                    </td>
                 </tr>'''
             a11y_html = f'''
             <section class="report-section">
-                <h2>Accessibility (WCAG 2.1 AA)</h2>
+                <h2>Uji Aksesibilitas & Kenyamanan Pengguna (WCAG 2.1 AA)</h2>
+                <p class="section-desc">Pemeriksaan kepatuhan antarmuka terhadap standar aksesibilitas internasional (kemudahan membaca teks, kelengkapan label form, dan kenyamanan navigasi bagi semua pengguna).</p>
                 <table class="data-table">
-                    <thead><tr><th>Severity</th><th>Description</th><th>Element</th><th>WCAG</th></tr></thead>
+                    <thead><tr><th style="width:100px;">Dampak</th><th>Jenis Masalah & Penjelasan</th><th>Elemen UI Terkait</th><th>Standar Patokan</th></tr></thead>
                     <tbody>{a11y_rows}</tbody>
                 </table>
             </section>'''
