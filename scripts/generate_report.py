@@ -260,9 +260,9 @@ class QAReportGenerator:
             for s in doc.sections:
                 header = s.header
                 hp = header.paragraphs[0]
-                hp.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+                hp.alignment = WD_ALIGN_PARAGRAPH.LEFT
                 hrun = hp.add_run()
-                hrun.add_picture(str(logo_path), height=Pt(28))
+                hrun.add_picture(str(logo_path), height=Inches(0.72))
 
         # Default typography
         font_family = 'Times New Roman' if mode == 'e2e' else 'Calibri'
