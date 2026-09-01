@@ -224,11 +224,11 @@ class QAReportGenerator:
         TEXT_GREEN = RGBColor(0x1E, 0x7A, 0x3C)      # Severity 5 / Pass / Expected
 
         SEV_THEME = {
-            1: {"name": "1 – Menguras Biaya", "bg": "FDE7E4", "text_col": TEXT_RED},
-            2: {"name": "2 – Rusak", "bg": "FDF0E3", "text_col": TEXT_ORANGE},
-            3: {"name": "3 – Sulit Dipakai", "bg": "FEF7DA", "text_col": TEXT_YELLOW},
-            4: {"name": "4 – Perlu Perbaikan", "bg": "E8F1FB", "text_col": TEXT_BLUE},
-            5: {"name": "5 – Pelengkap", "bg": "E7F6EC", "text_col": TEXT_GREEN},
+            1: {"name": "Critical", "bg": "FDE7E4", "text_col": TEXT_RED},
+            2: {"name": "High", "bg": "FDF0E3", "text_col": TEXT_ORANGE},
+            3: {"name": "Medium", "bg": "FEF7DA", "text_col": TEXT_YELLOW},
+            4: {"name": "Low", "bg": "E8F1FB", "text_col": TEXT_BLUE},
+            5: {"name": "Low", "bg": "E7F6EC", "text_col": TEXT_GREEN},
         }
 
         def get_sev_num(sev_val):
@@ -239,6 +239,30 @@ class QAReportGenerator:
             if s in ["4", "low"]: return 4
             if s in ["5", "trivial", "cosmetic", "info"]: return 5
             return 3
+
+        # ── Logo Discovery ──
+        logo_path = None
+        candidates = [
+            Path(__file__).parent.parent / "assets" / "logo.jpeg",
+            Path(__file__).parent.parent / "assets" / "logo.jpg",
+            Path(__file__).parent.parent / "assets" / "logo.png",
+            Path(r"D:\Adila\Playwright\orca\Tamplate report BUG\WhatsApp Image 2026-09-01 at 14.23.23.jpeg"),
+            self.output_dir / "logo.jpeg",
+            self.output_dir / "logo.png",
+        ]
+        for c in candidates:
+            if c.exists():
+                logo_path = c
+                break
+
+        # Setup Header for all sections with Logo if found
+        if logo_path:
+            for s in doc.sections:
+                header = s.header
+                hp = header.paragraphs[0]
+                hp.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+                hrun = hp.add_run()
+                hrun.add_picture(str(logo_path), height=Pt(28))
 
         # Default typography
         font_family = 'Times New Roman' if mode == 'e2e' else 'Calibri'
@@ -553,7 +577,7 @@ class QAReportGenerator:
             sev_desc_parts = []
             for n in range(1, 6):
                 if sev_counts[n] > 0:
-                    sev_desc_parts.append(f"{sev_counts[n]} {SEV_THEME[n]['name'].split('–')[-1].strip()}")
+                    sev_desc_parts.append(f"{sev_counts[n]} {SEV_THEME[n]['name']}")
             sev_narrative = f" Ditemukan {len(bugs)} temuan ({', '.join(sev_desc_parts)})." if bugs else " Tidak ditemukan defect/bug."
             p = doc.add_paragraph(f"Audit Bug Hunting telah selesai dieksekusi pada fitur {project}.{sev_narrative}")
             p.paragraph_format.space_after = Pt(6)
@@ -569,7 +593,7 @@ class QAReportGenerator:
                 set_cell_shading(sev_tbl.rows[n].cells[0], theme["bg"])
                 set_cell_text(sev_tbl.rows[n].cells[0], str(n), bold=True, color=theme["text_col"], align=WD_ALIGN_PARAGRAPH.CENTER)
                 set_cell_shading(sev_tbl.rows[n].cells[1], theme["bg"])
-                set_cell_text(sev_tbl.rows[n].cells[1], theme["name"].split("–")[-1].strip(), color=theme["text_col"])
+                set_cell_text(sev_tbl.rows[n].cells[1], theme["name"], color=theme["text_col"])
                 set_cell_text(sev_tbl.rows[n].cells[2], str(sev_counts[n]), align=WD_ALIGN_PARAGRAPH.CENTER)
 
             # 3. Rincian Temuan Bug
@@ -1223,9 +1247,28 @@ class QAReportGenerator:
 ''')
 
         # Header section with dynamic data
+        logo_html = ""
+        logo_candidates = [
+            Path(__file__).parent.parent / "assets" / "logo.jpeg",
+            Path(__file__).parent.parent / "assets" / "logo.jpg",
+            Path(__file__).parent.parent / "assets" / "logo.png",
+            Path(r"D:\Adila\Playwright\orca\Tamplate report BUG\WhatsApp Image 2026-09-01 at 14.23.23.jpeg"),
+            self.output_dir / "logo.jpeg",
+            self.output_dir / "logo.png",
+        ]
+        for lc in logo_candidates:
+            if lc.exists():
+                b64_logo = self._embed_file(lc, "image")
+                if b64_logo:
+                    logo_html = f'<img src="{b64_logo}" alt="Logo" style="max-height:48px;border-radius:6px;background:#fff;padding:4px;box-shadow:0 2px 8px rgba(0,0,0,0.15);">'
+                break
+
         html_parts.append(f'''        <header class="report-header">
             <button class="theme-toggle" id="themeBtn">Dark / Light</button>
-            <h1>QA Test Report</h1>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:12px;">
+                <h1 style="margin:0;">QA Test Report</h1>
+                {logo_html}
+            </div>
             <div class="meta">
                 <span>Project: {self.data.get("project_name","N/A")}</span>
                 <span>Target: {self.data.get("target_url","N/A")}</span>
