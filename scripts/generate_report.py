@@ -1247,28 +1247,9 @@ class QAReportGenerator:
 ''')
 
         # Header section with dynamic data
-        logo_html = ""
-        logo_candidates = [
-            Path(__file__).parent.parent / "assets" / "logo.jpeg",
-            Path(__file__).parent.parent / "assets" / "logo.jpg",
-            Path(__file__).parent.parent / "assets" / "logo.png",
-            Path(r"D:\Adila\Playwright\orca\Tamplate report BUG\WhatsApp Image 2026-09-01 at 14.23.23.jpeg"),
-            self.output_dir / "logo.jpeg",
-            self.output_dir / "logo.png",
-        ]
-        for lc in logo_candidates:
-            if lc.exists():
-                b64_logo = self._embed_file(lc, "image")
-                if b64_logo:
-                    logo_html = f'<img src="{b64_logo}" alt="Logo" style="max-height:48px;border-radius:6px;background:#fff;padding:4px;box-shadow:0 2px 8px rgba(0,0,0,0.15);">'
-                break
-
         html_parts.append(f'''        <header class="report-header">
             <button class="theme-toggle" id="themeBtn">Dark / Light</button>
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:12px;">
-                <h1 style="margin:0;">QA Test Report</h1>
-                {logo_html}
-            </div>
+            <h1 style="margin-bottom:8px;">QA Test Report</h1>
             <div class="meta">
                 <span>Project: {self.data.get("project_name","N/A")}</span>
                 <span>Target: {self.data.get("target_url","N/A")}</span>
