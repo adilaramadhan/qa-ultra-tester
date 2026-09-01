@@ -497,6 +497,33 @@ class QAReportGenerator:
             set_cell_text(sum_tbl.rows[1].cells[2], str(failed), color=TEXT_RED if failed > 0 else TEXT_GREEN, bold=True, align=WD_ALIGN_PARAGRAPH.CENTER)
             set_cell_text(sum_tbl.rows[1].cells[3], success_rate, bold=True, align=WD_ALIGN_PARAGRAPH.CENTER)
 
+            # Statistik Temuan Bug (Severity 1–4)
+            sev_counts = {1: 0, 2: 0, 3: 0, 4: 0}
+            for bug in bugs:
+                s_num = get_sev_num(bug.get("severity", 3))
+                sev_counts[s_num] = sev_counts.get(s_num, 0) + 1
+
+            p_sev_title = doc.add_paragraph()
+            p_sev_title.paragraph_format.space_before = Pt(8)
+            p_sev_title.paragraph_format.space_after = Pt(4)
+            r_st = p_sev_title.add_run("Statistik Temuan Defect Berdasarkan Tingkat Keparahan (Severity 1–4):")
+            r_st.bold = True
+            r_st.font.name = font_family
+            r_st.font.size = Pt(10.5)
+
+            sev_tbl = doc.add_table(rows=5, cols=3)
+            sev_tbl.style = 'Table Grid'
+            auto_width(sev_tbl)
+            add_header_row(sev_tbl, ["Severity", "Keterangan", "Jumlah"])
+            for n in range(1, 5):
+                theme = SEV_THEME[n]
+                set_cell_shading(sev_tbl.rows[n].cells[0], theme["bg"])
+                set_cell_text(sev_tbl.rows[n].cells[0], str(n), bold=True, color=theme["text_col"], align=WD_ALIGN_PARAGRAPH.CENTER)
+                set_cell_shading(sev_tbl.rows[n].cells[1], theme["bg"])
+                set_cell_text(sev_tbl.rows[n].cells[1], theme["name"], color=theme["text_col"])
+                set_cell_text(sev_tbl.rows[n].cells[2], str(sev_counts[n]), align=WD_ALIGN_PARAGRAPH.CENTER)
+            doc.add_paragraph('')
+
             # Section 2: Hasil Pengujian Fitur & Skenario (Happy Path & Negative)
             add_h1("2. Hasil Pengujian Skenario (Happy Path & Negative)")
             
