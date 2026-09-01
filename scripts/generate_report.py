@@ -993,19 +993,71 @@ class QAReportGenerator:
             # 2. Performance & Latency (if available)
             if perf:
                 add_h1("2. Metrik Performa & Latensi API")
-                perf_tbl = doc.add_table(rows=len(perf) + 1, cols=3)
+                p_perf = doc.add_paragraph("Pengukuran kecepatan respon server, latensi pengolahan data, dan stabilitas throughput service API:")
+                p_perf.paragraph_format.space_after = Pt(4)
+
+                perf_items = []
+                for key, val in perf.items():
+                    metric_clean = key.upper().replace("_", " ").strip()
+                    key_map = {
+                        "AVG RESPONSE TIME": "AVG RESPONSE TIME",
+                        "AVERAGE RESPONSE TIME": "AVG RESPONSE TIME",
+                        "P95 LATENCY": "P95 LATENCY",
+                        "P95": "P95 LATENCY",
+                        "THROUGHPUT": "THROUGHPUT",
+                        "RPS": "THROUGHPUT",
+                        "TTFB MS": "TTFB",
+                        "TTFB": "TTFB"
+                    }
+                    display_key = key_map.get(metric_clean, metric_clean)
+                    info = METRIC_INFO.get(display_key, METRIC_INFO.get(metric_clean, {}))
+                    full_name = info.get("full", key)
+                    desc_text = info.get("desc", "")
+
+                    if isinstance(val, dict):
+                        val_text = f'{val.get("value","")}{val.get("unit","")}'
+                        rating = val.get("rating", "")
+                    elif "ms" in key.lower() or "latency" in key.lower() or "time" in key.lower():
+                        val_text = format_duration(val) if isinstance(val, (int, float)) else str(val)
+                        rating = ""
+                    else:
+                        val_text = str(val)
+                        rating = ""
+                    perf_items.append((display_key, full_name, desc_text, val_text, rating))
+
+                perf_tbl = doc.add_table(rows=len(perf_items) + 1, cols=4)
                 perf_tbl.style = 'Table Grid'
                 auto_width(perf_tbl)
-                add_header_row(perf_tbl, ["Metrik", "Nilai", "Rating"])
-                for i, (m, v) in enumerate(perf.items()):
-                    row = perf_tbl.rows[i + 1]
-                    if i % 2 == 1:
-                        for cell in row.cells: set_cell_shading(cell, INFO_LABEL_BG)
-                    val_str = f"{v.get('value','')}{v.get('unit','')}" if isinstance(v, dict) else str(v)
-                    rating = v.get("rating", "-") if isinstance(v, dict) else "-"
-                    set_cell_text(row.cells[0], m, bold=True, size=9)
-                    set_cell_text(row.cells[1], val_str, size=9)
-                    set_cell_text(row.cells[2], rating.replace("_", " ").title(), size=9)
+                add_header_row(perf_tbl, ["Metrik & Penjelasan", "Nama Standar", "Nilai Uji", "Rating Kelayakan"])
+                for idx, (metric, full, desc, val_t, rating) in enumerate(perf_items, 1):
+                    if idx % 2 == 0:
+                        for cell in perf_tbl.rows[idx].cells: set_cell_shading(cell, INFO_LABEL_BG)
+
+                    c0 = perf_tbl.rows[idx].cells[0]
+                    c0.text = ""
+                    p0 = c0.paragraphs[0]
+                    p0.paragraph_format.space_before = Pt(2)
+                    p0.paragraph_format.space_after = Pt(1)
+                    r_m = p0.add_run(metric)
+                    r_m.bold = True
+                    r_m.font.name = font_family
+                    r_m.font.size = Pt(10)
+                    if desc:
+                        p0_sub = c0.add_paragraph()
+                        p0_sub.paragraph_format.space_before = Pt(0)
+                        p0_sub.paragraph_format.space_after = Pt(2)
+                        r_d = p0_sub.add_run(desc)
+                        r_d.italic = True
+                        r_d.font.name = font_family
+                        r_d.font.size = Pt(8.5)
+                        r_d.font.color.rgb = RGBColor(0x55, 0x55, 0x55)
+
+                    set_cell_text(perf_tbl.rows[idx].cells[1], full, size=9.5)
+                    set_cell_text(perf_tbl.rows[idx].cells[2], val_t, bold=True, align=WD_ALIGN_PARAGRAPH.CENTER, size=10)
+
+                    r_col = TEXT_GREEN if rating.lower() in ["good", "optimal", "pass"] else (TEXT_ORANGE if rating.lower() in ["needs_improvement", "warning"] else (TEXT_RED if rating.lower() in ["poor", "bad", "fail"] else None))
+                    set_cell_text(perf_tbl.rows[idx].cells[3], rating.replace("_", " ").title() if rating else "-", bold=True if r_col else False, color=r_col, align=WD_ALIGN_PARAGRAPH.CENTER, size=9.5)
+                doc.add_paragraph('')
 
             # 3. Bug / Defect Temuan di API
             if bugs:
