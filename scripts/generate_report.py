@@ -193,7 +193,7 @@ class QAReportGenerator:
         doc = Document()
 
         # Detect testing mode: 'e2e' | 'bug_hunter' | 'api'
-        mode = self.data.get("testing_mode", self.data.get("mode", "")).strip().lower()
+        mode = str(self.data.get("testing_mode", self.data.get("mode", ""))).strip().lower()
         if not mode:
             # Auto-detect from data composition
             if self.data.get("api_testing") or (not self._bugs() and any(t.get("layer", "").lower() == "api" for t in self._tests())):
@@ -202,6 +202,12 @@ class QAReportGenerator:
                 mode = "bug_hunter"
             else:
                 mode = "e2e"
+
+        # Normalize alias
+        if mode in ["api_testing", "api-test", "api_test"]:
+            mode = "api"
+        elif mode in ["bughunter", "bug-hunter", "bug"]:
+            mode = "bug_hunter"
 
         # ── Page setup (Letter, margins top=90pt, bottom=50.4pt, left=57.6pt, right=57.6pt) ──
         sec = doc.sections[0]
@@ -879,33 +885,75 @@ class QAReportGenerator:
                 api_tbl = doc.add_table(rows=len(tests) + 1, cols=5)
                 api_tbl.style = 'Table Grid'
                 auto_width(api_tbl)
-                add_header_row(api_tbl, ["No", "Endpoint / Method", "Response & Latency", "Status", "Payload / Contract"])
-                for idx, test in enumerate(tests, 1):
-                    status = test.get("status", "").strip().lower()
-                    is_pass = status in ["pass", "passed", "success", "ok"]
-                    status_text = "200 OK / PASS" if is_pass else "ERROR / FAIL"
-                    status_color = TEXT_GREEN if is_pass else TEXT_RED
-                    error = test.get("error", "")
-                    duration_text = format_duration(test.get("duration_ms", test.get("duration", 0)))
-                    result_desc = f"Response Time: {duration_text}" + (f"\nError: {error}" if error else "")
+                add_header_row(api_tbl, ["No", "Endpoint & Method", "Expected Result", "Status", "Latency"])
+                for i, t in enumerate(tests):
+                    row = api_tbl.rows[i + 1]
+                    if i % 2 == 1:
+                        for cell in row.cells: set_cell_shading(cell, INFO_LABEL_BG)
+                    st = str(t.get("status", "")).strip().lower()
+                    is_p = st in ["pass", "passed", "success", "ok"]
+                    meth = t.get("method", "POST" if "create" in t.get("name","").lower() or "submit" in t.get("name","").lower() else "GET")
+                    ep = t.get("endpoint", t.get("location", t.get("name", "-")))
+                    dur = t.get("duration_ms", t.get("duration", 0))
 
-                    set_cell_text(api_tbl.rows[idx].cells[0], str(idx), align=WD_ALIGN_PARAGRAPH.CENTER)
-                    set_cell_text(api_tbl.rows[idx].cells[1], test.get("name", ""), bold=True)
-                    set_cell_text(api_tbl.rows[idx].cells[2], result_desc)
-                    set_cell_text(api_tbl.rows[idx].cells[3], status_text, bold=True, color=status_color, align=WD_ALIGN_PARAGRAPH.CENTER)
-                    set_cell_text(api_tbl.rows[idx].cells[4], test.get("details", "Valid Schema"))
+                    set_cell_text(row.cells[0], str(i + 1), align=WD_ALIGN_PARAGRAPH.CENTER, size=9)
+                    set_cell_text(row.cells[1], f"[{meth}] {ep}", bold=True, size=9)
+                    set_cell_text(row.cells[2], t.get("expected", "HTTP 200 / Valid schema"), size=9)
+                    set_cell_text(row.cells[3], "PASS" if is_p else "FAIL", bold=True, color=TEXT_GREEN if is_p else TEXT_RED, align=WD_ALIGN_PARAGRAPH.CENTER, size=9)
+                    set_cell_text(row.cells[4], format_duration(dur), align=WD_ALIGN_PARAGRAPH.CENTER, size=9)
 
-            # 2. Performance & Throughput
+            # 2. Performance & Latency (if available)
             if perf:
-                add_h1("2. Performa & Latensi API")
+                add_h1("2. Metrik Performa & Latensi API")
                 perf_tbl = doc.add_table(rows=len(perf) + 1, cols=3)
                 perf_tbl.style = 'Table Grid'
                 auto_width(perf_tbl)
-                add_header_row(perf_tbl, ["Metrik", "Nilai", "Status Latensi"])
-                for idx, (k, v) in enumerate(perf.items(), 1):
-                    set_cell_text(perf_tbl.rows[idx].cells[0], k.replace("_", " ").upper(), bold=True)
-                    set_cell_text(perf_tbl.rows[idx].cells[1], format_duration(v) if isinstance(v, (int, float)) else str(v), align=WD_ALIGN_PARAGRAPH.CENTER)
-                    set_cell_text(perf_tbl.rows[idx].cells[2], "Optimal (< 500ms)", color=TEXT_GREEN, align=WD_ALIGN_PARAGRAPH.CENTER)
+                add_header_row(perf_tbl, ["Metrik", "Nilai", "Rating"])
+                for i, (m, v) in enumerate(perf.items()):
+                    row = perf_tbl.rows[i + 1]
+                    if i % 2 == 1:
+                        for cell in row.cells: set_cell_shading(cell, INFO_LABEL_BG)
+                    val_str = f"{v.get('value','')}{v.get('unit','')}" if isinstance(v, dict) else str(v)
+                    rating = v.get("rating", "-") if isinstance(v, dict) else "-"
+                    set_cell_text(row.cells[0], m, bold=True, size=9)
+                    set_cell_text(row.cells[1], val_str, size=9)
+                    set_cell_text(row.cells[2], rating.replace("_", " ").title(), size=9)
+
+            # 3. Bug / Defect Temuan di API
+            if bugs:
+                add_h1("3. Temuan Isu & Bug API")
+                for bug in bugs:
+                    b_id = bug.get("id", "BUG")
+                    b_title = bug.get("title", "")
+                    s_num = get_sev_num(bug.get("severity", 3))
+                    theme = SEV_THEME[s_num]
+
+                    add_h2(f"[{b_id}] {b_title}")
+                    b_tbl = doc.add_table(rows=5, cols=2)
+                    b_tbl.style = 'Table Grid'
+                    auto_width(b_tbl)
+                    b_rows = [
+                        ("Severity", f"Severity {s_num} - {theme['name']}"),
+                        ("Endpoint / Method", bug.get("location", "-")),
+                        ("Hasil Aktual", bug.get("actual", "-")),
+                        ("Hasil Diharapkan", bug.get("expected", "-")),
+                        ("Rekomendasi Fix", bug.get("recommendation", "-")),
+                    ]
+                    for r_idx, (lbl, val) in enumerate(b_rows):
+                        set_cell_shading(b_tbl.rows[r_idx].cells[0], INFO_LABEL_BG)
+                        set_cell_text(b_tbl.rows[r_idx].cells[0], lbl, bold=True, size=10)
+                        if lbl == "Severity":
+                            set_cell_shading(b_tbl.rows[r_idx].cells[1], theme["bg"])
+                            set_cell_text(b_tbl.rows[r_idx].cells[1], val, bold=True, color=theme["text_col"], size=10)
+                        elif lbl == "Hasil Aktual":
+                            set_cell_text(b_tbl.rows[r_idx].cells[1], val, color=TEXT_RED, size=10)
+                        elif lbl == "Hasil Diharapkan":
+                            set_cell_text(b_tbl.rows[r_idx].cells[1], val, color=TEXT_GREEN, size=10)
+                        elif lbl == "Rekomendasi Fix":
+                            set_cell_text(b_tbl.rows[r_idx].cells[1], val, bold=True, color=BRAND_NAVY, size=10)
+                        else:
+                            set_cell_text(b_tbl.rows[r_idx].cells[1], val, size=10)
+                    doc.add_paragraph('')
 
         # ── COMMON FOOTER: BUKTI VISUAL (Gallery) ─────────────────
         ss_dir = self.output_dir / "screenshots"
@@ -1105,75 +1153,127 @@ class QAReportGenerator:
                 </div>
             </div>'''
 
-        # Test results grouped by Category (Happy Path vs Negative) + detail breakdown
-        happy_tests = [t for t in tests if t.get("category") == "happy_path" or (not t.get("category") and str(t.get("status","")).strip().lower() in ["pass", "passed", "success", "ok"] and "invalid" not in t.get("name","").lower() and "fail" not in t.get("name","").lower())]
-        negative_tests = [t for t in tests if t not in happy_tests]
+        # Test results grouped by Category or Endpoint Matrix (if API mode)
+        test_results_html = ""
+        mode = self.data.get("testing_mode", "e2e").lower()
 
-        def _render_html_test_group(test_list, group_name):
-            if not test_list:
-                return ""
-            group_html = f'<div class="category-header"><span>{group_name}</span><span class="category-count">{len(test_list)} Skenario</span></div>'
-            for idx, t in enumerate(test_list, 1):
+        if mode == "api":
+            # Specialized API Matrix View
+            api_rows = ""
+            for idx, t in enumerate(tests, 1):
                 status_raw = str(t.get("status", "")).strip().lower()
                 is_pass = status_raw in ["pass", "passed", "success", "ok"]
                 status_cls = "pass" if is_pass else "fail"
-                flaky_mark = '<span class="flaky-badge">FLAKY</span>' if t.get("flaky") else ""
+                status_text = "200 OK / PASS" if is_pass else "ERROR / FAIL"
                 dur_ms = t.get("duration_ms", t.get("duration", 0))
-                status_display = "PASSED" if is_pass else "FAILED"
                 
-                # Steps formatting
-                steps = t.get("steps", [])
-                if isinstance(steps, list) and steps:
-                    steps_li = "".join([f"<li>{strip_step_number(s)}</li>" for s in steps])
-                    steps_html = f"<ol>{steps_li}</ol>"
-                elif isinstance(steps, str) and steps:
-                    steps_html = f"<p>{steps}</p>"
-                else:
-                    steps_html = "<p style='color:var(--text-secondary)'>-</p>"
-
-                expected = t.get("expected", "-")
-                actual = t.get("actual", t.get("details", t.get("error", "-")))
-
-                # Screenshot button
-                evidence = t.get("evidence", {})
-                test_ss = t.get("screenshot") or (evidence.get("screenshot") if isinstance(evidence, dict) else None)
-                ss_html = ""
-                if test_ss:
-                    b64 = self._embed_file(test_ss)
-                    ss_src = b64 if b64 else test_ss
-                    test_name_clean = t.get("name","").replace('"', '&quot;')
-                    ss_html = f'<div style="margin-top:10px;"><button class="ss-link ss-btn" data-src="{ss_src}" data-caption="Bukti Skenario: {test_name_clean}">Lihat Screenshot Bukti</button></div>'
-
-                group_html += f'''
-                <div class="test-card">
-                    <div class="test-card-header" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'">
-                        <div class="test-card-title">
-                            <span class="status-badge {status_cls}">{status_display}</span>
-                            <span>#{idx} {t.get("name","")}</span>
-                            {flaky_mark}
+                # Payload / Request details
+                req_method = t.get("method", "POST" if "create" in t.get("name","").lower() or "submit" in t.get("name","").lower() else "GET")
+                endpoint_url = t.get("endpoint", t.get("location", self.data.get("target_url", "")))
+                
+                api_rows += f'''
+                <tr>
+                    <td style="text-align:center; font-weight:600;">{idx}</td>
+                    <td>
+                        <div style="display:flex; align-items:center; gap:6px; margin-bottom:2px;">
+                            <span class="layer-badge" style="font-weight:700; font-size:0.75rem;">{req_method}</span>
+                            <strong style="color:var(--text);">{t.get("name","")}</strong>
                         </div>
-                        <div class="test-card-meta">
-                            <span class="layer-badge">{t.get("layer","UI").upper()}</span>
-                            <span style="font-size:0.8rem;color:var(--text-secondary)">{format_duration(dur_ms)}</span>
-                        </div>
-                    </div>
-                    <div class="test-card-body" style="display:{'block' if not is_pass else 'none'};">
-                        <div class="test-field"><strong>Steps / Langkah:</strong> {steps_html}</div>
-                        <div class="test-field"><strong>Expected:</strong> <span style="color:var(--success)">{expected}</span></div>
-                        <div class="test-field"><strong>Actual:</strong> <span style="color:{'var(--danger)' if not is_pass else 'var(--text)'}">{actual}</span></div>
-                        <div class="test-field"><strong>Browser:</strong> {t.get("browser","Chromium")} | <strong>Retries:</strong> {t.get("retries", 0)}</div>
-                        {ss_html}
-                    </div>
-                </div>'''
-            return group_html
+                        <div style="font-size:0.8rem; color:var(--text-secondary); font-family:monospace;">{endpoint_url}</div>
+                    </td>
+                    <td>
+                        <div style="font-size:0.85rem;"><strong>Expected:</strong> <span style="color:var(--success)">{t.get("expected", "HTTP 200 & Valid Schema")}</span></div>
+                        <div style="font-size:0.85rem; margin-top:2px;"><strong>Actual:</strong> <span style="color:{'var(--danger)' if not is_pass else 'var(--text)'}">{t.get("actual", t.get("details", "-"))}</span></div>
+                    </td>
+                    <td style="text-align:center; font-weight:600; font-size:0.85rem;">{format_duration(dur_ms)}</td>
+                    <td style="text-align:center;"><span class="status-badge {status_cls}">{status_text}</span></td>
+                </tr>'''
 
-        test_results_html = ""
-        if happy_tests:
-            test_results_html += _render_html_test_group(happy_tests, "Skenario Happy Path (Positif)")
-        if negative_tests:
-            test_results_html += _render_html_test_group(negative_tests, "Skenario Negative / Boundary / Exception")
-        if not tests:
-            test_results_html = '<p style="color:var(--text-secondary);text-align:center;padding:20px;">Tidak ada test results tercatat.</p>'
+            test_results_html = f'''
+            <div class="category-header"><span>Matriks Pengujian Endpoint API & Layanan</span><span class="category-count">{len(tests)} Endpoint</span></div>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th style="width:40px; text-align:center;">#</th>
+                        <th>Endpoint & Nama Pengujian</th>
+                        <th>Validasi Payload & Response</th>
+                        <th style="width:110px; text-align:center;">Latensi</th>
+                        <th style="width:130px; text-align:center;">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {api_rows}
+                </tbody>
+            </table>'''
+        else:
+            # E2E & Bug Hunter Category Accordion View
+            happy_tests = [t for t in tests if t.get("category") == "happy_path" or (not t.get("category") and str(t.get("status","")).strip().lower() in ["pass", "passed", "success", "ok"] and "invalid" not in t.get("name","").lower() and "fail" not in t.get("name","").lower())]
+            negative_tests = [t for t in tests if t not in happy_tests]
+
+            def _render_html_test_group(test_list, group_name):
+                if not test_list:
+                    return ""
+                group_html = f'<div class="category-header"><span>{group_name}</span><span class="category-count">{len(test_list)} Skenario</span></div>'
+                for idx, t in enumerate(test_list, 1):
+                    status_raw = str(t.get("status", "")).strip().lower()
+                    is_pass = status_raw in ["pass", "passed", "success", "ok"]
+                    status_cls = "pass" if is_pass else "fail"
+                    flaky_mark = '<span class="flaky-badge">FLAKY</span>' if t.get("flaky") else ""
+                    dur_ms = t.get("duration_ms", t.get("duration", 0))
+                    status_display = "PASSED" if is_pass else "FAILED"
+                    
+                    # Steps formatting
+                    steps = t.get("steps", [])
+                    if isinstance(steps, list) and steps:
+                        steps_li = "".join([f"<li>{strip_step_number(s)}</li>" for s in steps])
+                        steps_html = f"<ol>{steps_li}</ol>"
+                    elif isinstance(steps, str) and steps:
+                        steps_html = f"<p>{steps}</p>"
+                    else:
+                        steps_html = "<p style='color:var(--text-secondary)'>-</p>"
+
+                    expected = t.get("expected", "-")
+                    actual = t.get("actual", t.get("details", t.get("error", "-")))
+
+                    # Screenshot button
+                    evidence = t.get("evidence", {})
+                    test_ss = t.get("screenshot") or (evidence.get("screenshot") if isinstance(evidence, dict) else None)
+                    ss_html = ""
+                    if test_ss:
+                        b64 = self._embed_file(test_ss)
+                        ss_src = b64 if b64 else test_ss
+                        test_name_clean = t.get("name","").replace('"', '&quot;')
+                        ss_html = f'<div style="margin-top:10px;"><button class="ss-link ss-btn" data-src="{ss_src}" data-caption="Bukti Skenario: {test_name_clean}">Lihat Screenshot Bukti</button></div>'
+
+                    group_html += f'''
+                    <div class="test-card">
+                        <div class="test-card-header" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'">
+                            <div class="test-card-title">
+                                <span class="status-badge {status_cls}">{status_display}</span>
+                                <span>#{idx} {t.get("name","")}</span>
+                                {flaky_mark}
+                            </div>
+                            <div class="test-card-meta">
+                                <span class="layer-badge">{t.get("layer","UI").upper()}</span>
+                                <span style="font-size:0.8rem;color:var(--text-secondary)">{format_duration(dur_ms)}</span>
+                            </div>
+                        </div>
+                        <div class="test-card-body" style="display:{'block' if not is_pass else 'none'};">
+                            <div class="test-field"><strong>Steps / Langkah:</strong> {steps_html}</div>
+                            <div class="test-field"><strong>Expected:</strong> <span style="color:var(--success)">{expected}</span></div>
+                            <div class="test-field"><strong>Actual:</strong> <span style="color:{'var(--danger)' if not is_pass else 'var(--text)'}">{actual}</span></div>
+                            <div class="test-field"><strong>Browser:</strong> {t.get("browser","Chromium")} | <strong>Retries:</strong> {t.get("retries", 0)}</div>
+                            {ss_html}
+                        </div>
+                    </div>'''
+                return group_html
+
+            if happy_tests:
+                test_results_html += _render_html_test_group(happy_tests, "Skenario Happy Path (Positif)")
+            if negative_tests:
+                test_results_html += _render_html_test_group(negative_tests, "Skenario Negative / Boundary / Exception")
+            if not tests:
+                test_results_html = '<p style="color:var(--text-secondary);text-align:center;padding:20px;">Tidak ada test results tercatat.</p>'
 
         # Performance rows with full names + descriptions
         perf_html = ""
