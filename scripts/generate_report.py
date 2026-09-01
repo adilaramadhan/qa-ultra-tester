@@ -178,83 +178,129 @@ class QAReportGenerator:
                         return str(videos_rec[0])
         return None
 
-    # ── DOCX (Professional Template) ────────────────────────
+    # ── DOCX (Professional Branded Template) ─────────────────
     def generate_docx(self, filename="QA_TEST_REPORT.docx"):
         if not HAS_DOCX:
             print("Warning: python-docx not installed. Skipping DOCX generation.")
             return None
 
-        from docx.shared import Cm, Emu
+        from docx.shared import Cm, Emu, Inches, Pt, RGBColor
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
         from docx.enum.table import WD_TABLE_ALIGNMENT
         from docx.oxml.ns import qn, nsdecls
         from docx.oxml import parse_xml
 
         doc = Document()
 
-        # ── Style setup ──
-        BODY_FONT = 'Times New Roman'
-        TITLE_FONT = 'Times New Roman'
-        BODY_SIZE = 12
-        TITLE_SIZE = 14
+        # ── Page setup (Letter, margins top=72pt, bottom=50.4pt, left=57.6pt, right=57.6pt) ──
+        sec = doc.sections[0]
+        sec.top_margin = Pt(72)
+        sec.bottom_margin = Pt(50.4)
+        sec.left_margin = Pt(57.6)
+        sec.right_margin = Pt(57.6)
 
-        style = doc.styles['Normal']
-        style.font.name = BODY_FONT
-        style.font.size = Pt(BODY_SIZE)
-        style.paragraph_format.space_after = Pt(4)
-        style.paragraph_format.space_before = Pt(2)
+        # ── Color Palette (Branded) ──
+        BRAND_NAVY = RGBColor(0x1B, 0x2A, 0x8A)      # Primary heading & brand (#1B2A8A)
+        HEADER_BG = "1B2A8A"                         # Table header background
+        HEADER_FG = RGBColor(0xFF, 0xFF, 0xFF)       # Table header text
+        INFO_LABEL_BG = "F2F4FB"                     # Info table left column background
+        LIGHT_SUBTITLE = RGBColor(0xDC, 0xE1, 0xF5)  # Banner subtitle text
+        
+        TEXT_RED = RGBColor(0xB3, 0x26, 0x1E)        # Severity 1 / Actual error / Fail (#B3261E)
+        TEXT_ORANGE = RGBColor(0xC5, 0x6A, 0x12)     # Severity 2 (#C56A12)
+        TEXT_YELLOW = RGBColor(0x8D, 0x73, 0x00)     # Severity 3 (#8D7300)
+        TEXT_BLUE = RGBColor(0x18, 0x5F, 0xB4)       # Severity 4 (#185FB4)
+        TEXT_GREEN = RGBColor(0x1E, 0x7A, 0x3C)      # Severity 5 / Passed / Expected (#1E7A3C)
 
-        DARK_BLUE = RGBColor(0x1B, 0x3A, 0x5C)
-        HEADER_BG = "1B3A5C"
-        HEADER_FG = RGBColor(0xFF, 0xFF, 0xFF)
-        LIGHT_GRAY_BG = "F2F2F2"
-        GREEN = RGBColor(0x22, 0x8B, 0x22)
-        RED = RGBColor(0xDC, 0x35, 0x45)
-        ORANGE = RGBColor(0xFF, 0x8C, 0x00)
-        YELLOW_DARK = RGBColor(0xCC, 0x99, 0x00)
-
-        severity_colors = {
-            "critical": RED, "high": ORANGE,
-            "medium": YELLOW_DARK, "low": GREEN
+        # Severity shading & text mapping (Severity 1-5 scale)
+        SEV_THEME = {
+            1: {"name": "1 – Menguras Biaya", "bg": "FDE7E4", "text_col": TEXT_RED},
+            2: {"name": "2 – Rusak", "bg": "FDF0E3", "text_col": TEXT_ORANGE},
+            3: {"name": "3 – Sulit Dipakai", "bg": "FEF7DA", "text_col": TEXT_YELLOW},
+            4: {"name": "4 – Perlu Perbaikan", "bg": "E8F1FB", "text_col": TEXT_BLUE},
+            5: {"name": "5 – Pelengkap", "bg": "E7F6EC", "text_col": TEXT_GREEN},
         }
+
+        def get_sev_num(sev_val):
+            """Normalize severity input string/int to 1-5 integer."""
+            s = str(sev_val).strip().lower()
+            if s in ["1", "critical", "crit", "blocker"]:
+                return 1
+            if s in ["2", "high"]:
+                return 2
+            if s in ["3", "medium", "med"]:
+                return 3
+            if s in ["4", "low"]:
+                return 4
+            if s in ["5", "trivial", "cosmetic", "info"]:
+                return 5
+            return 3
+
+        # ── Style setup ──
+        style = doc.styles['Normal']
+        style.font.name = 'Calibri'
+        style.font.size = Pt(11)
+        style.paragraph_format.space_after = Pt(3)
+        style.paragraph_format.space_before = Pt(0)
+        style.paragraph_format.line_spacing = 1.15
 
         def set_cell_shading(cell, color_hex):
             """Set background color for a table cell."""
             shading = parse_xml(f'<w:shd {nsdecls("w")} w:fill="{color_hex}"/>')
             cell._tc.get_or_add_tcPr().append(shading)
 
-        def set_cell_text(cell, text, bold=False, color=None, size=None, align=None, font=None):
+        def set_cell_text(cell, text, bold=False, color=None, size=10, align=None, font='Calibri'):
             """Set formatted text in a cell."""
             cell.text = ""
             p = cell.paragraphs[0]
+            p.paragraph_format.space_after = Pt(2)
+            p.paragraph_format.space_before = Pt(2)
             if align:
                 p.alignment = align
             run = p.add_run(str(text))
-            run.font.name = font or BODY_FONT
-            run.font.size = Pt(size or BODY_SIZE)
+            run.font.name = font
+            run.font.size = Pt(size)
             run.bold = bold
             if color:
                 run.font.color.rgb = color
 
         def add_header_row(table, texts, row_idx=0):
-            """Style a header row with dark background and white text."""
+            """Style a header row with dark navy background and white text."""
             for i, txt in enumerate(texts):
                 cell = table.rows[row_idx].cells[i]
                 set_cell_shading(cell, HEADER_BG)
-                set_cell_text(cell, txt, bold=True, color=HEADER_FG, size=BODY_SIZE)
-
-        def add_zebra_row(table, row_idx):
-            """Add light gray background to even rows."""
-            if row_idx % 2 == 0:
-                for cell in table.rows[row_idx].cells:
-                    set_cell_shading(cell, LIGHT_GRAY_BG)
+                set_cell_text(cell, txt, bold=True, color=HEADER_FG, size=10, align=WD_ALIGN_PARAGRAPH.CENTER)
 
         def auto_width(table):
-            """Set table width to 100%."""
+            """Center table and set width to 100%."""
             table.alignment = WD_TABLE_ALIGNMENT.CENTER
-            tbl = table._tbl
-            tblPr = tbl.tblPr if tbl.tblPr is not None else parse_xml(f'<w:tblPr {nsdecls("w")}/>')
+            tblPr = table._tbl.tblPr if table._tbl.tblPr is not None else parse_xml(f'<w:tblPr {nsdecls("w")}/>')
             tblW = parse_xml(f'<w:tblW {nsdecls("w")} w:type="pct" w:w="5000"/>')
             tblPr.append(tblW)
+
+        def add_h1(title_text):
+            """Add branded H1 heading."""
+            p = doc.add_paragraph()
+            p.paragraph_format.space_before = Pt(14)
+            p.paragraph_format.space_after = Pt(4)
+            run = p.add_run(title_text)
+            run.font.name = 'Calibri'
+            run.font.size = Pt(15)
+            run.bold = True
+            run.font.color.rgb = BRAND_NAVY
+            return p
+
+        def add_h2(subtitle_text):
+            """Add branded H2 heading."""
+            p = doc.add_paragraph()
+            p.paragraph_format.space_before = Pt(10)
+            p.paragraph_format.space_after = Pt(3)
+            run = p.add_run(subtitle_text)
+            run.font.name = 'Calibri'
+            run.font.size = Pt(12)
+            run.bold = True
+            run.font.color.rgb = BRAND_NAVY
+            return p
 
         summary = self._summary()
         bugs = self._bugs()
@@ -276,250 +322,213 @@ class QAReportGenerator:
             passed = summary.get("passed", 0)
             failed = summary.get("failed", 0)
             flaky = summary.get("flaky", 0)
-        duration = summary.get("duration_ms", 0)
+        
         quality = summary.get("quality_score", self.data.get("quality_score", 0))
         success_rate = f"{passed*100//total}%" if total else "0%"
 
-        # Determine production readiness
-        critical_bugs = sum(1 for b in bugs if b.get("severity", "").lower() == "critical")
-        high_bugs = sum(1 for b in bugs if b.get("severity", "").lower() == "high")
-        if critical_bugs > 0:
-            readiness = "NOT READY - Critical Issues Found"
-            readiness_color = RED
-        elif high_bugs > 0:
-            readiness = "CONDITIONAL - High Priority Fixes Required"
-            readiness_color = ORANGE
+        # Count severity 1-5
+        sev_counts = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
+        for b in bugs:
+            n = get_sev_num(b.get("severity", 3))
+            sev_counts[n] = sev_counts.get(n, 0) + 1
+
+        if sev_counts[1] > 0:
+            readiness = "BELUM SIAP – Ada Isu Severity 1 (Critical)"
+            readiness_col = TEXT_RED
+        elif sev_counts[2] > 0:
+            readiness = "BERSYARAT – Ada Isu Severity 2 (High)"
+            readiness_col = TEXT_ORANGE
         elif failed > 0:
-            readiness = "PASSED WITH NOTES"
-            readiness_color = YELLOW_DARK
+            readiness = "LULUS DENGAN CATATAN"
+            readiness_col = TEXT_YELLOW
         else:
-            readiness = "PASSED / PRODUCTION READY"
-            readiness_color = GREEN
+            readiness = "SIAP RILIS (PRODUCTION READY)"
+            readiness_col = TEXT_GREEN
 
         # ════════════════════════════════════════════════════════
-        # PAGE 1: COVER / HEADER
+        # HEADER BANNER (Table 1: Single cell with Navy BG)
         # ════════════════════════════════════════════════════════
-        title_p = doc.add_paragraph()
-        title_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        title_p.space_before = Pt(60)
-        title_p.space_after = Pt(8)
-        run = title_p.add_run("LAPORAN HASIL PENGUJIAN QA E2E")
-        run.font.size = Pt(22)
-        run.font.color.rgb = DARK_BLUE
-        run.bold = True
-        run.font.name = TITLE_FONT
+        banner_tbl = doc.add_table(rows=1, cols=1)
+        banner_tbl.style = 'Table Grid'
+        auto_width(banner_tbl)
+        b_cell = banner_tbl.rows[0].cells[0]
+        set_cell_shading(b_cell, HEADER_BG)
+        
+        bp0 = b_cell.paragraphs[0]
+        bp0.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        bp0.paragraph_format.space_before = Pt(8)
+        bp0.paragraph_format.space_after = Pt(2)
+        r0 = bp0.add_run("LAPORAN HASIL PENGUJIAN QA E2E")
+        r0.font.name = 'Calibri'
+        r0.font.size = Pt(22)
+        r0.bold = True
+        r0.font.color.rgb = HEADER_FG
 
-        sub_p = doc.add_paragraph()
-        sub_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        sub_p.space_after = Pt(24)
-        run = sub_p.add_run(project.upper())
-        run.font.size = Pt(16)
-        run.font.color.rgb = DARK_BLUE
-        run.bold = True
-        run.font.name = TITLE_FONT
-
-        # Cover info table (with background)
-        COVER_LABEL_BG = "1B3A5C"
-        COVER_VALUE_BG = "E8EDF2"
-        cover_tbl = doc.add_table(rows=5, cols=2)
-        cover_tbl.style = 'Table Grid'
-        cover_tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
-        auto_width(cover_tbl)
-        cover_data = [
-            ("Target URL", target),
-            ("Fitur Uji", project),
-            ("Tanggal Uji", test_date),
-            ("Metodologi", tester),
-            ("Status Kesiapan", readiness),
-        ]
-        for i, (label, value) in enumerate(cover_data):
-            set_cell_shading(cover_tbl.rows[i].cells[0], COVER_LABEL_BG)
-            set_cell_text(cover_tbl.rows[i].cells[0], label, bold=True, color=HEADER_FG, size=BODY_SIZE)
-            set_cell_shading(cover_tbl.rows[i].cells[1], COVER_VALUE_BG)
-            if label == "Status Kesiapan":
-                set_cell_text(cover_tbl.rows[i].cells[1], value, bold=True, color=readiness_color, size=BODY_SIZE)
-            else:
-                set_cell_text(cover_tbl.rows[i].cells[1], value, size=BODY_SIZE)
-
-        doc.add_page_break()
-
-        # ════════════════════════════════════════════════════════
-        # SECTION 1: RINGKASAN EKSEKUTIF
-        # ════════════════════════════════════════════════════════
-        h = doc.add_heading('1. Ringkasan Eksekutif (Executive Summary)', 1)
-        for run in h.runs:
-            run.font.color.rgb = DARK_BLUE
-            run.font.name = TITLE_FONT
-            run.font.size = Pt(TITLE_SIZE)
-
-        # Narrative paragraph
-        bug_summary_text = ""
-        if bugs:
-            sev_counts = {}
-            for b in bugs:
-                s = b.get("severity", "medium").capitalize()
-                sev_counts[s] = sev_counts.get(s, 0) + 1
-            parts = [f"{v} {k}" for k, v in sev_counts.items()]
-            bug_summary_text = f" Ditemukan {len(bugs)} defect ({', '.join(parts)})."
-        else:
-            bug_summary_text = " Tidak ditemukan defect."
-
-        narrative = (
-            f"Pengujian end-to-end (E2E) telah selesai dieksekusi pada menu {project}. "
-            f"Dari total {total} skenario pengujian, {passed} skenario berhasil PASSED "
-            f"dan {failed} skenario FAILED dengan tingkat keberhasilan {success_rate}."
-            f"{bug_summary_text}"
-        )
-        p = doc.add_paragraph(narrative)
-        p.paragraph_format.space_after = Pt(12)
-
-        # Summary table
-        sum_tbl = doc.add_table(rows=2, cols=4)
-        sum_tbl.style = 'Table Grid'
-        auto_width(sum_tbl)
-        add_header_row(sum_tbl, ["Total Skenario", "Passed", "Defect / Failed", "Success Rate"])
-        set_cell_text(sum_tbl.rows[1].cells[0], str(total), align=WD_ALIGN_PARAGRAPH.CENTER)
-        set_cell_text(sum_tbl.rows[1].cells[1], f"{passed} Skenario", color=GREEN, align=WD_ALIGN_PARAGRAPH.CENTER)
-        set_cell_text(sum_tbl.rows[1].cells[2], f"{failed} Defect", color=RED if failed > 0 else GREEN, align=WD_ALIGN_PARAGRAPH.CENTER)
-        set_cell_text(sum_tbl.rows[1].cells[3], success_rate, bold=True, align=WD_ALIGN_PARAGRAPH.CENTER)
+        bp1 = b_cell.add_paragraph()
+        bp1.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        bp1.paragraph_format.space_before = Pt(0)
+        bp1.paragraph_format.space_after = Pt(8)
+        r1 = bp1.add_run(project.upper())
+        r1.font.name = 'Calibri'
+        r1.font.size = Pt(14)
+        r1.bold = True
+        r1.font.color.rgb = LIGHT_SUBTITLE
 
         doc.add_paragraph('')
 
         # ════════════════════════════════════════════════════════
-        # SECTION 2: STATISTIK TEMUAN BUG
+        # PROJECT METADATA TABLE (Table 2: 2 columns, F2F4FB label bg)
         # ════════════════════════════════════════════════════════
+        meta_tbl = doc.add_table(rows=6, cols=2)
+        meta_tbl.style = 'Table Grid'
+        auto_width(meta_tbl)
+        meta_data = [
+            ("Target / Environment", target),
+            ("Fitur Uji", project),
+            ("Tanggal Uji", test_date),
+            ("Metodologi / Tester", tester),
+            ("Quality Score", f"{quality}/100" if quality else "-"),
+            ("Status Kesiapan", readiness),
+        ]
+        for i, (label, val) in enumerate(meta_data):
+            set_cell_shading(meta_tbl.rows[i].cells[0], INFO_LABEL_BG)
+            set_cell_text(meta_tbl.rows[i].cells[0], label, bold=True, size=10)
+            if label == "Status Kesiapan":
+                set_cell_text(meta_tbl.rows[i].cells[1], val, bold=True, color=readiness_col, size=10)
+            else:
+                set_cell_text(meta_tbl.rows[i].cells[1], val, size=10)
+
+        # ════════════════════════════════════════════════════════
+        # 1. RINGKASAN EKSEKUTIF
+        # ════════════════════════════════════════════════════════
+        add_h1("1. Ringkasan Eksekutif")
+
+        sev_desc_parts = []
+        for n in range(1, 6):
+            if sev_counts[n] > 0:
+                sev_desc_parts.append(f"{sev_counts[n]} {SEV_THEME[n]['name'].split('–')[-1].strip()}")
+        sev_narrative = f" Ditemukan {len(bugs)} temuan ({', '.join(sev_desc_parts)})." if bugs else " Tidak ditemukan defect/bug."
+
+        narrative = (
+            f"Pengujian end-to-end (E2E) telah selesai dieksekusi pada {project}. "
+            f"Dari total {total} skenario, {passed} PASSED dan {failed} FAILED dengan tingkat keberhasilan {success_rate}."
+            f"{sev_narrative}"
+        )
+        p = doc.add_paragraph(narrative)
+        p.paragraph_format.space_after = Pt(6)
+
+        # Summary Metrics Table
+        sum_tbl = doc.add_table(rows=2, cols=4)
+        sum_tbl.style = 'Table Grid'
+        auto_width(sum_tbl)
+        add_header_row(sum_tbl, ["Total Skenario", "Passed", "Failed", "Success Rate"])
+        set_cell_text(sum_tbl.rows[1].cells[0], str(total), align=WD_ALIGN_PARAGRAPH.CENTER)
+        set_cell_text(sum_tbl.rows[1].cells[1], str(passed), color=TEXT_GREEN, bold=True, align=WD_ALIGN_PARAGRAPH.CENTER)
+        set_cell_text(sum_tbl.rows[1].cells[2], str(failed), color=TEXT_RED if failed > 0 else TEXT_GREEN, bold=True, align=WD_ALIGN_PARAGRAPH.CENTER)
+        set_cell_text(sum_tbl.rows[1].cells[3], success_rate, bold=True, align=WD_ALIGN_PARAGRAPH.CENTER)
+
+        # ════════════════════════════════════════════════════════
+        # 2. STATISTIK TEMUAN (Severity 1–5)
+        # ════════════════════════════════════════════════════════
+        add_h1("2. Statistik Temuan (Severity 1–5)")
+
+        sev_tbl = doc.add_table(rows=6, cols=3)
+        sev_tbl.style = 'Table Grid'
+        auto_width(sev_tbl)
+        add_header_row(sev_tbl, ["Severity", "Keterangan", "Jumlah"])
+
+        for n in range(1, 6):
+            theme = SEV_THEME[n]
+            # Column 1: Number
+            set_cell_shading(sev_tbl.rows[n].cells[0], theme["bg"])
+            set_cell_text(sev_tbl.rows[n].cells[0], str(n), bold=True, color=theme["text_col"], align=WD_ALIGN_PARAGRAPH.CENTER)
+            # Column 2: Keterangan
+            set_cell_shading(sev_tbl.rows[n].cells[1], theme["bg"])
+            set_cell_text(sev_tbl.rows[n].cells[1], theme["name"].split("–")[-1].strip(), color=theme["text_col"])
+            # Column 3: Count
+            set_cell_text(sev_tbl.rows[n].cells[2], str(sev_counts[n]), align=WD_ALIGN_PARAGRAPH.CENTER)
+
+        # ════════════════════════════════════════════════════════
+        # 3. RINCIAN TEMUAN
+        # ════════════════════════════════════════════════════════
+        add_h1("3. Rincian Temuan")
+
         if bugs:
-            h = doc.add_heading('2. Statistik Temuan Bug', 1)
-            for run in h.runs:
-                run.font.color.rgb = DARK_BLUE
-                run.font.name = TITLE_FONT
-                run.font.size = Pt(TITLE_SIZE)
-
-            # Severity count table
-            sev_order = ["critical", "high", "medium", "low"]
-            sev_labels = {"critical": "Critical", "high": "High", "medium": "Medium", "low": "Low"}
-            sev_tbl = doc.add_table(rows=len(sev_order) + 2, cols=2)
-            sev_tbl.style = 'Table Grid'
-            auto_width(sev_tbl)
-            add_header_row(sev_tbl, ["Severity", "Jumlah"])
-            for idx, sev in enumerate(sev_order, 1):
-                count = sum(1 for b in bugs if b.get("severity", "").lower() == sev)
-                set_cell_text(sev_tbl.rows[idx].cells[0], sev_labels[sev], color=severity_colors.get(sev))
-                set_cell_text(sev_tbl.rows[idx].cells[1], str(count), align=WD_ALIGN_PARAGRAPH.CENTER)
-                add_zebra_row(sev_tbl, idx)
-            # Total row
-            total_row = len(sev_order) + 1
-            set_cell_text(sev_tbl.rows[total_row].cells[0], "Total", bold=True)
-            set_cell_text(sev_tbl.rows[total_row].cells[1], str(len(bugs)), bold=True, align=WD_ALIGN_PARAGRAPH.CENTER)
-            set_cell_shading(sev_tbl.rows[total_row].cells[0], LIGHT_GRAY_BG)
-            set_cell_shading(sev_tbl.rows[total_row].cells[1], LIGHT_GRAY_BG)
-
-            doc.add_paragraph('')
-
-        # ════════════════════════════════════════════════════════
-        # SECTION 3: RINCIAN TEMUAN BUG
-        # ════════════════════════════════════════════════════════
-        if bugs:
-            h = doc.add_heading('3. Rincian Temuan Bug', 1)
-            for run in h.runs:
-                run.font.color.rgb = DARK_BLUE
-                run.font.name = TITLE_FONT
-                run.font.size = Pt(TITLE_SIZE)
-
-            # Bug overview table
+            # Bug list table
             bug_overview = doc.add_table(rows=len(bugs) + 1, cols=5)
             bug_overview.style = 'Table Grid'
             auto_width(bug_overview)
             add_header_row(bug_overview, ["ID", "Judul", "Severity", "Priority", "Status"])
 
             for idx, bug in enumerate(bugs, 1):
-                sev = bug.get("severity", "medium").lower()
-                set_cell_text(bug_overview.rows[idx].cells[0], bug.get("id", ""), bold=True)
+                s_num = get_sev_num(bug.get("severity", 3))
+                theme = SEV_THEME[s_num]
+                set_cell_text(bug_overview.rows[idx].cells[0], bug.get("id", f"BUG-{idx:03d}"), bold=True)
                 set_cell_text(bug_overview.rows[idx].cells[1], bug.get("title", ""))
-                set_cell_text(bug_overview.rows[idx].cells[2], sev.capitalize(), bold=True, color=severity_colors.get(sev))
-                set_cell_text(bug_overview.rows[idx].cells[3], bug.get("priority", ""))
-                set_cell_text(bug_overview.rows[idx].cells[4], bug.get("status", "Open"))
-                add_zebra_row(bug_overview, idx)
+                # Severity with background chip color
+                set_cell_shading(bug_overview.rows[idx].cells[2], theme["bg"])
+                set_cell_text(bug_overview.rows[idx].cells[2], theme["name"], bold=True, color=theme["text_col"])
+                set_cell_text(bug_overview.rows[idx].cells[3], bug.get("priority", "-"), align=WD_ALIGN_PARAGRAPH.CENTER)
+                set_cell_text(bug_overview.rows[idx].cells[4], bug.get("status", "Open"), align=WD_ALIGN_PARAGRAPH.CENTER)
 
-            doc.add_page_break()
-
-            # Detailed bug reports
+            # Detail per bug
             for bug in bugs:
-                sev = bug.get("severity", "medium").lower()
-                sev_color = severity_colors.get(sev, DARK_BLUE)
+                s_num = get_sev_num(bug.get("severity", 3))
+                theme = SEV_THEME[s_num]
+                b_id = bug.get("id", "BUG")
+                b_title = bug.get("title", "")
 
-                # Bug heading
-                bug_h = doc.add_heading(f'{bug.get("id","")}: {bug.get("title","")}', 2)
-                for run in bug_h.runs:
-                    run.font.color.rgb = sev_color
-                    run.font.name = TITLE_FONT
-                    run.font.size = Pt(13)
+                add_h2(f"{b_id} – {b_title}")
 
-                # Info table (borderless)
-                info_data = [
-                    ("ID", bug.get("id", "")),
-                    ("Severity", bug.get("severity", "").capitalize()),
-                    ("Priority", bug.get("priority", "")),
-                    ("Menu / Lokasi", bug.get("location", "")),
-                    ("Tipe", bug.get("type", "")),
-                ]
-                info_tbl = doc.add_table(rows=len(info_data), cols=2)
-                for i, (label, val) in enumerate(info_data):
-                    set_cell_text(info_tbl.rows[i].cells[0], label, bold=True, size=10)
-                    if label == "Severity":
-                        set_cell_text(info_tbl.rows[i].cells[1], val, bold=True, color=sev_color, size=10)
-                    else:
-                        set_cell_text(info_tbl.rows[i].cells[1], val, size=10)
-                # Remove borders
-                for row in info_tbl.rows:
-                    for cell in row.cells:
-                        tc = cell._tc
-                        tcPr = tc.get_or_add_tcPr()
-                        tcBorders = parse_xml(
-                            f'<w:tcBorders {nsdecls("w")}>'
-                            '<w:top w:val="none" w:sz="0" w:space="0" w:color="auto"/>'
-                            '<w:left w:val="none" w:sz="0" w:space="0" w:color="auto"/>'
-                            '<w:bottom w:val="none" w:sz="0" w:space="0" w:color="auto"/>'
-                            '<w:right w:val="none" w:sz="0" w:space="0" w:color="auto"/>'
-                            '</w:tcBorders>'
-                        )
-                        tcPr.append(tcBorders)
+                # Meta line
+                meta_p = doc.add_paragraph()
+                r_sev_lbl = meta_p.add_run("Severity: ")
+                r_sev_lbl.bold = True
+                r_sev_val = meta_p.add_run(theme["name"])
+                r_sev_val.bold = True
+                r_sev_val.font.color.rgb = theme["text_col"]
 
-                # Steps
+                r_pri_lbl = meta_p.add_run(f"   •   Priority: {bug.get('priority', '-')}   •   Lokasi: {bug.get('location', '-')}   •   Tipe: {bug.get('type', '-')}")
+                r_pri_lbl.font.color.rgb = RGBColor(0x55, 0x55, 0x55)
+
+                # Steps to Reproduce
                 steps = bug.get("steps", [])
                 if steps:
-                    p = doc.add_paragraph()
-                    run = p.add_run("Langkah Reproduksi:")
-                    run.bold = True
-                    run.font.color.rgb = DARK_BLUE
+                    sp = doc.add_paragraph()
+                    r_step_title = sp.add_run("Langkah Reproduksi:")
+                    r_step_title.bold = True
+                    r_step_title.font.color.rgb = BRAND_NAVY
                     for idx_s, step in enumerate(steps, 1):
                         clean = strip_step_number(step)
-                        doc.add_paragraph(f'{idx_s}. {clean}')
+                        step_p = doc.add_paragraph()
+                        r_num = step_p.add_run(f"{idx_s}. ")
+                        r_num.bold = True
+                        step_p.add_run(clean)
 
                 # Actual
-                p = doc.add_paragraph()
-                run = p.add_run("Hasil Aktual: ")
-                run.bold = True
-                run.font.color.rgb = RED
-                p.add_run(bug.get("actual", ""))
+                p_act = doc.add_paragraph()
+                r_act_lbl = p_act.add_run("Hasil Aktual: ")
+                r_act_lbl.bold = True
+                r_act_lbl.font.color.rgb = TEXT_RED
+                p_act.add_run(bug.get("actual", ""))
 
                 # Expected
-                p = doc.add_paragraph()
-                run = p.add_run("Hasil yang Diharapkan: ")
-                run.bold = True
-                run.font.color.rgb = GREEN
-                p.add_run(bug.get("expected", ""))
+                p_exp = doc.add_paragraph()
+                r_exp_lbl = p_exp.add_run("Hasil Diharapkan: ")
+                r_exp_lbl.bold = True
+                r_exp_lbl.font.color.rgb = TEXT_GREEN
+                p_exp.add_run(bug.get("expected", ""))
 
                 # Recommendation
                 rec = bug.get("recommendation", "")
                 if rec:
-                    p = doc.add_paragraph()
-                    run = p.add_run("Rekomendasi Perbaikan: ")
-                    run.bold = True
-                    run.font.color.rgb = DARK_BLUE
-                    p.add_run(rec)
+                    p_rec = doc.add_paragraph()
+                    r_rec_lbl = p_rec.add_run("Rekomendasi Perbaikan: ")
+                    r_rec_lbl.bold = True
+                    r_rec_lbl.font.color.rgb = BRAND_NAVY
+                    p_rec.add_run(rec)
 
-                # Evidence — screenshot embedded
+                # Embedded Evidence Screenshot (if available)
                 evidence = bug.get("evidence", "")
                 screenshot = evidence if isinstance(evidence, str) else ""
                 if not screenshot and isinstance(evidence, dict):
@@ -529,69 +538,62 @@ class QAReportGenerator:
                     if not spath.is_absolute():
                         spath = self.output_dir / spath
                     if spath.exists():
-                        doc.add_paragraph('')
-                        p = doc.add_paragraph()
-                        run = p.add_run("Bukti Visual:")
-                        run.bold = True
-                        run.font.color.rgb = DARK_BLUE
-                        doc.add_picture(str(spath), width=Inches(5.5))
-                        last_p = doc.paragraphs[-1]
-                        last_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                        cap = doc.add_paragraph()
-                        cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                        run = cap.add_run(f'Gambar: Bukti {bug.get("id","")} - {bug.get("title","")[:60]}')
-                        run.font.size = Pt(9)
-                        run.italic = True
-                        run.font.color.rgb = RGBColor(0x66, 0x66, 0x66)
+                        try:
+                            doc.add_paragraph('')
+                            doc.add_picture(str(spath), width=Inches(5.5))
+                            doc.paragraphs[-1].alignment = WD_ALIGN_PARAGRAPH.CENTER
+                            cap = doc.add_paragraph()
+                            cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                            r_cap = cap.add_run(f'Gambar: Bukti {b_id} – {b_title[:60]}')
+                            r_cap.font.size = Pt(9)
+                            r_cap.italic = True
+                            r_cap.font.color.rgb = RGBColor(0x66, 0x66, 0x66)
+                        except Exception as e:
+                            print(f"Warning: Could not embed screenshot {spath}: {e}")
 
                 doc.add_paragraph('')
+        else:
+            p = doc.add_paragraph("Tidak ada bug/defect yang ditemukan dalam pengujian ini.")
+            p.paragraph_format.space_after = Pt(8)
 
         # ════════════════════════════════════════════════════════
-        # SECTION 4: HASIL PENGUJIAN FITUR & VALIDASI
+        # 4. HASIL PENGUJIAN FITUR & VALIDASI
         # ════════════════════════════════════════════════════════
-        next_section = 4 if bugs else 2
-        doc.add_page_break()
-        h = doc.add_heading(f'{next_section}. Hasil Pengujian Fitur & Validasi', 1)
-        for run in h.runs:
-            run.font.color.rgb = DARK_BLUE
+        add_h1("4. Hasil Pengujian Fitur & Validasi")
 
         if tests:
             test_tbl = doc.add_table(rows=len(tests) + 1, cols=5)
             test_tbl.style = 'Table Grid'
             auto_width(test_tbl)
-            add_header_row(test_tbl, ["No", "Fitur / Skenario", "Hasil Pengujian", "Status", "Keterangan"])
+            add_header_row(test_tbl, ["No", "Fitur / Skenario", "Hasil", "Status", "Layer"])
 
             for idx, test in enumerate(tests, 1):
                 status = test.get("status", "").strip().lower()
-                status_text = "PASSED" if status in ["pass", "passed"] else "FAILED"
-                status_color = GREEN if status in ["pass", "passed"] else RED
-                error = test.get("error", "")
+                is_pass = status in ["pass", "passed", "success", "ok"]
+                status_text = "PASSED" if is_pass else "FAILED"
+                status_color = TEXT_GREEN if is_pass else TEXT_RED
+                error = test.get("error", "") or test.get("details", "")
                 duration_text = format_duration(test.get("duration_ms", test.get("duration", 0)))
+                result_desc = f"Durasi: {duration_text}" + (f" | {error}" if error else "")
 
                 set_cell_text(test_tbl.rows[idx].cells[0], str(idx), align=WD_ALIGN_PARAGRAPH.CENTER)
                 set_cell_text(test_tbl.rows[idx].cells[1], test.get("name", ""))
-                set_cell_text(test_tbl.rows[idx].cells[2], f"Durasi: {duration_text}" + (f"\n{error}" if error else ""))
+                set_cell_text(test_tbl.rows[idx].cells[2], result_desc)
                 set_cell_text(test_tbl.rows[idx].cells[3], status_text, bold=True, color=status_color, align=WD_ALIGN_PARAGRAPH.CENTER)
-                set_cell_text(test_tbl.rows[idx].cells[4], test.get("layer", "").upper())
-                add_zebra_row(test_tbl, idx)
-
-        doc.add_paragraph('')
+                set_cell_text(test_tbl.rows[idx].cells[4], test.get("layer", "UI").upper(), align=WD_ALIGN_PARAGRAPH.CENTER)
+        else:
+            p = doc.add_paragraph("Data skenario test tidak tersedia.")
+            p.paragraph_format.space_after = Pt(8)
 
         # ════════════════════════════════════════════════════════
-        # SECTION 5: PERFORMANCE METRICS
+        # 5. METRIK PERFORMA (Core Web Vitals)
         # ════════════════════════════════════════════════════════
         if perf:
-            next_section += 1
-            h = doc.add_heading(f'{next_section}. Metrik Performa (Core Web Vitals)', 1)
-            for run in h.runs:
-                run.font.color.rgb = DARK_BLUE
-                run.font.name = TITLE_FONT
-                run.font.size = Pt(TITLE_SIZE)
+            add_h1("5. Metrik Performa (Core Web Vitals)")
 
             perf_items = []
             for key, val in perf.items():
                 metric_key = key.replace("_ms", "").replace("_", " ").upper()
-                # Map common keys
                 key_map = {
                     "PAGE LOAD MS": "Page Load", "TTFB MS": "TTFB", "FCP MS": "FCP",
                     "LCP MS": "LCP", "CLS": "CLS", "TOTAL REQUESTS": "Total Requests",
@@ -611,7 +613,7 @@ class QAReportGenerator:
                     rating = ""
                 elif key.lower() == "cls":
                     val_text = str(val)
-                    rating = "Good" if val < 0.1 else "Needs Improvement" if val < 0.25 else "Poor"
+                    rating = "Good" if float(val) < 0.1 else "Needs Improvement" if float(val) < 0.25 else "Poor"
                 else:
                     val_text = str(val)
                     rating = ""
@@ -625,40 +627,48 @@ class QAReportGenerator:
                 set_cell_text(perf_tbl.rows[idx].cells[0], metric, bold=True)
                 set_cell_text(perf_tbl.rows[idx].cells[1], full)
                 set_cell_text(perf_tbl.rows[idx].cells[2], val_t, align=WD_ALIGN_PARAGRAPH.CENTER)
-                rating_color = GREEN if rating == "Good" else (ORANGE if "Improvement" in rating else (RED if rating == "Poor" else None))
-                set_cell_text(perf_tbl.rows[idx].cells[3], rating, color=rating_color, align=WD_ALIGN_PARAGRAPH.CENTER)
-                add_zebra_row(perf_tbl, idx)
-
-            doc.add_paragraph('')
+                rating_color = TEXT_GREEN if rating.lower() == "good" else (TEXT_ORANGE if "improvement" in rating.lower() else (TEXT_RED if rating.lower() == "poor" else None))
+                set_cell_text(perf_tbl.rows[idx].cells[3], rating.replace("_", " ").title(), color=rating_color, bold=bool(rating_color), align=WD_ALIGN_PARAGRAPH.CENTER)
 
         # ════════════════════════════════════════════════════════
-        # SECTION 6: ACCESSIBILITY
+        # 6. AKSESIBILITAS (WCAG 2.1 AA)
         # ════════════════════════════════════════════════════════
         if a11y:
-            next_section += 1
-            h = doc.add_heading(f'{next_section}. Aksesibilitas (WCAG 2.1 AA)', 1)
-            for run in h.runs:
-                run.font.color.rgb = DARK_BLUE
-                run.font.name = TITLE_FONT
-                run.font.size = Pt(TITLE_SIZE)
+            add_h1("6. Aksesibilitas (WCAG 2.1 AA)")
 
             a11y_tbl = doc.add_table(rows=len(a11y) + 1, cols=4)
             a11y_tbl.style = 'Table Grid'
             auto_width(a11y_tbl)
-            add_header_row(a11y_tbl, ["Rule", "Impact", "Count", "Deskripsi"])
+            add_header_row(a11y_tbl, ["Rule / Tipe", "Dampak", "Elemen", "Deskripsi"])
             for idx, issue in enumerate(a11y, 1):
-                impact = issue.get("impact", "").lower()
-                impact_color = RED if impact == "critical" else (ORANGE if impact == "serious" else None)
-                set_cell_text(a11y_tbl.rows[idx].cells[0], issue.get("rule", ""))
+                impact = issue.get("impact", issue.get("severity", "")).lower()
+                impact_color = TEXT_RED if impact in ["critical", "serious"] else (TEXT_ORANGE if impact == "moderate" else None)
+                set_cell_text(a11y_tbl.rows[idx].cells[0], issue.get("rule", issue.get("wcag", "-")))
                 set_cell_text(a11y_tbl.rows[idx].cells[1], impact.capitalize(), color=impact_color, bold=True)
-                set_cell_text(a11y_tbl.rows[idx].cells[2], str(issue.get("count", "")), align=WD_ALIGN_PARAGRAPH.CENTER)
+                set_cell_text(a11y_tbl.rows[idx].cells[2], issue.get("element", "-"))
                 set_cell_text(a11y_tbl.rows[idx].cells[3], issue.get("description", ""))
-                add_zebra_row(a11y_tbl, idx)
-
-            doc.add_paragraph('')
 
         # ════════════════════════════════════════════════════════
-        # SECTION 7: BUKTI VISUAL (All Screenshots)
+        # 7. REKOMENDASI TINDAK LANJUT
+        # ════════════════════════════════════════════════════════
+        add_h1("7. Rekomendasi Tindak Lanjut")
+
+        if bugs:
+            for idx_b, bug in enumerate(bugs, 1):
+                s_num = get_sev_num(bug.get("severity", 3))
+                theme = SEV_THEME[s_num]
+                rec = bug.get("recommendation", "Perlu investigasi dan perbaikan lebih lanjut.")
+                p_rec = doc.add_paragraph()
+                r_prefix = p_rec.add_run(f"{idx_b}. [Severity {s_num}] {bug.get('id','BUG')} – ")
+                r_prefix.bold = True
+                r_prefix.font.color.rgb = theme["text_col"]
+                p_rec.add_run(rec)
+        else:
+            p = doc.add_paragraph("Tidak ada rekomendasi perbaikan khusus karena semua skenario berjalan sesuai harapan.")
+            p.paragraph_format.space_after = Pt(8)
+
+        # ════════════════════════════════════════════════════════
+        # 8. BUKTI VISUAL PENGUJIAN (Visual Evidence Gallery)
         # ════════════════════════════════════════════════════════
         ss_dir = self.output_dir / "screenshots"
         screenshots = []
@@ -667,14 +677,7 @@ class QAReportGenerator:
                 screenshots.extend(sorted(ss_dir.glob(ext)))
 
         if screenshots:
-            next_section += 1
-            doc.add_page_break()
-            h = doc.add_heading(f'{next_section}. Bukti Visual Pengujian (Visual Evidence)', 1)
-            for run in h.runs:
-                run.font.color.rgb = DARK_BLUE
-                run.font.name = TITLE_FONT
-                run.font.size = Pt(TITLE_SIZE)
-
+            add_h1("8. Bukti Visual Pengujian (Visual Evidence)")
             for img_idx, img_path in enumerate(screenshots, 1):
                 try:
                     doc.add_picture(str(img_path), width=Inches(5.5))
@@ -682,36 +685,15 @@ class QAReportGenerator:
                     cap = doc.add_paragraph()
                     cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
                     img_name = img_path.stem.replace("-", " ").replace("_", " ").title()
-                    run = cap.add_run(f'Gambar {img_idx}: {img_name}')
-                    run.font.size = Pt(9)
-                    run.italic = True
-                    run.font.color.rgb = RGBColor(0x66, 0x66, 0x66)
+                    r_cap = cap.add_run(f'Gambar {img_idx}: {img_name}')
+                    r_cap.font.size = Pt(9)
+                    r_cap.italic = True
+                    r_cap.font.color.rgb = RGBColor(0x66, 0x66, 0x66)
                     doc.add_paragraph('')
-                except Exception:
-                    pass
+                except Exception as e:
+                    print(f"Warning: Could not embed visual gallery image {img_path}: {e}")
 
-        # ════════════════════════════════════════════════════════
-        # SECTION 8: REKOMENDASI TINDAK LANJUT
-        # ════════════════════════════════════════════════════════
-        if bugs:
-            next_section += 1
-            h = doc.add_heading(f'{next_section}. Rekomendasi Tindak Lanjut', 1)
-            for run in h.runs:
-                run.font.color.rgb = DARK_BLUE
-                run.font.name = TITLE_FONT
-                run.font.size = Pt(TITLE_SIZE)
-
-            for idx, bug in enumerate(bugs, 1):
-                sev = bug.get("severity", "medium").lower()
-                priority = bug.get("priority", "")
-                rec = bug.get("recommendation", "")
-                p = doc.add_paragraph()
-                run = p.add_run(f'{idx}. Prioritas {priority} ({bug.get("id","")})  ')
-                run.bold = True
-                run.font.color.rgb = severity_colors.get(sev, DARK_BLUE)
-                p.add_run(rec)
-
-        # Save
+        # Save document with lock retry
         filepath = self.output_dir / filename
         try:
             doc.save(str(filepath))
