@@ -192,13 +192,6 @@ class QAReportGenerator:
 
         doc = Document()
 
-        # ── Page setup (Letter, margins top=72pt, bottom=50.4pt, left=57.6pt, right=57.6pt) ──
-        sec = doc.sections[0]
-        sec.top_margin = Pt(72)
-        sec.bottom_margin = Pt(50.4)
-        sec.left_margin = Pt(57.6)
-        sec.right_margin = Pt(57.6)
-
         # Detect testing mode: 'e2e' | 'bug_hunter' | 'api'
         mode = self.data.get("testing_mode", self.data.get("mode", "")).strip().lower()
         if not mode:
@@ -209,6 +202,14 @@ class QAReportGenerator:
                 mode = "bug_hunter"
             else:
                 mode = "e2e"
+
+        # ── Page setup (Letter, margins top=72pt, bottom=50.4pt, left=57.6pt, right=57.6pt) ──
+        sec = doc.sections[0]
+        sec.header_distance = Pt(28)
+        sec.top_margin = Pt(90) if mode in ['bug_hunter', 'api'] else Pt(72)
+        sec.bottom_margin = Pt(50.4)
+        sec.left_margin = Pt(57.6)
+        sec.right_margin = Pt(57.6)
 
         # ── Colors ──
         BRAND_NAVY = RGBColor(0x1B, 0x2A, 0x8A)      # #1B2A8A Primary Navy
@@ -261,6 +262,7 @@ class QAReportGenerator:
                 header = s.header
                 hp = header.paragraphs[0]
                 hp.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                hp.paragraph_format.space_after = Pt(14)
                 hrun = hp.add_run()
                 hrun.add_picture(str(logo_path), height=Inches(0.72))
 
