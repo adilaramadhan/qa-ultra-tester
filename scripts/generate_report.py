@@ -881,18 +881,64 @@ class QAReportGenerator:
                 screenshots.extend(sorted(ss_dir.glob(ext)))
 
         if screenshots and mode != "bug_hunter":  # Bug hunter already embeds inside bug items
+            # Map screenshots to tests / bugs for richer descriptions
+            ss_map = {}
+            for t in tests:
+                t_ss = t.get("screenshot") or ""
+                if isinstance(t.get("evidence"), dict):
+                    t_ss = t_ss or t["evidence"].get("screenshot", "")
+                if t_ss:
+                    pname = Path(t_ss).name.lower()
+                    ss_map[pname] = {
+                        "type": "Test Skenario",
+                        "title": t.get("name", ""),
+                        "status": t.get("status", "PASS"),
+                        "details": t.get("actual") or t.get("details") or t.get("expected") or ""
+                    }
+            for b in bugs:
+                b_ev = b.get("evidence") or {}
+                b_ss = b_ev.get("screenshot") if isinstance(b_ev, dict) else ""
+                if not b_ss:
+                    b_ss = b.get("screenshot", "")
+                if b_ss:
+                    pname = Path(b_ss).name.lower()
+                    ss_map[pname] = {
+                        "type": f"Temuan Bug [{b.get('id', '')}]",
+                        "title": b.get("title", ""),
+                        "status": b.get("severity", "CRITICAL"),
+                        "details": b.get("actual") or b.get("location") or ""
+                    }
+
             add_h1("Bukti Visual Pengujian (Visual Evidence)")
             for img_idx, img_path in enumerate(screenshots, 1):
                 try:
                     doc.add_picture(str(img_path), width=Inches(5.5))
                     doc.paragraphs[-1].alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    
+                    info = ss_map.get(img_path.name.lower(), {})
+                    context_title = info.get("title", img_path.stem.replace("-", " ").replace("_", " ").title())
+                    context_type = info.get("type", "Dokumentasi")
+                    context_status = info.get("status", "")
+                    context_details = info.get("details", "")
+
                     cap = doc.add_paragraph()
                     cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                    img_name = img_path.stem.replace("-", " ").replace("_", " ").title()
-                    r_cap = cap.add_run(f'Gambar {img_idx}: {img_name}')
-                    r_cap.font.size = Pt(9)
-                    r_cap.italic = True
-                    r_cap.font.color.rgb = RGBColor(0x66, 0x66, 0x66)
+                    r_cap = cap.add_run(f'Gambar {img_idx}: {context_title}')
+                    r_cap.font.name = 'Calibri'
+                    r_cap.font.size = Pt(10)
+                    r_cap.bold = True
+                    r_cap.font.color.rgb = RGBColor(0x1B, 0x2A, 0x8A)
+
+                    if context_status or context_details:
+                        cap_sub = doc.add_paragraph()
+                        cap_sub.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                        status_str = f"[{context_status.upper()}] " if context_status else ""
+                        r_sub = cap_sub.add_run(f'{status_str}({context_type}) {context_details}')
+                        r_sub.font.name = 'Calibri'
+                        r_sub.font.size = Pt(9)
+                        r_sub.italic = True
+                        r_sub.font.color.rgb = RGBColor(0x55, 0x55, 0x55)
+
                     doc.add_paragraph('')
                 except Exception as e:
                     print(f"Warning: Could not embed image: {e}")
@@ -1161,25 +1207,79 @@ class QAReportGenerator:
                 screenshots.extend(sorted(ss_dir.glob(ext)))
 
         if screenshots:
+            # Map screenshots to tests / bugs for richer descriptions
+            ss_map = {}
+            for t in tests:
+                t_ss = t.get("screenshot") or ""
+                if isinstance(t.get("evidence"), dict):
+                    t_ss = t_ss or t["evidence"].get("screenshot", "")
+                if t_ss:
+                    pname = Path(t_ss).name.lower()
+                    ss_map[pname] = {
+                        "type": "Test Skenario",
+                        "title": t.get("name", ""),
+                        "status": t.get("status", "PASS"),
+                        "details": t.get("actual") or t.get("details") or t.get("expected") or ""
+                    }
+            for b in bugs:
+                b_ev = b.get("evidence") or {}
+                b_ss = b_ev.get("screenshot") if isinstance(b_ev, dict) else ""
+                if not b_ss:
+                    b_ss = b.get("screenshot", "")
+                if b_ss:
+                    pname = Path(b_ss).name.lower()
+                    ss_map[pname] = {
+                        "type": f"Temuan Bug [{b.get('id', '')}]",
+                        "title": b.get("title", ""),
+                        "status": b.get("severity", "CRITICAL"),
+                        "details": b.get("actual") or b.get("location") or ""
+                    }
+
             gallery_items = ""
             for img_idx, img_path in enumerate(screenshots, 1):
                 b64_img = self._embed_file(str(img_path))
                 img_name = img_path.stem.replace("-", " ").replace("_", " ").title()
                 src = b64_img if b64_img else str(img_path)
+                
+                # Context info
+                info = ss_map.get(img_path.name.lower(), {})
+                context_type = info.get("type", "Dokumentasi Pengujian")
+                context_title = info.get("title", img_name)
+                context_status = info.get("status", "")
+                context_details = info.get("details", "")
+
+                status_badge_html = ""
+                if context_status:
+                    st_low = context_status.lower()
+                    if st_low in ["pass", "passed", "success", "ok"]:
+                        status_badge_html = f'<span class="status-badge pass" style="font-size:0.75rem; padding:2px 8px;">{context_status.upper()}</span>'
+                    elif st_low in ["fail", "failed", "error", "critical", "high"]:
+                        status_badge_html = f'<span class="status-badge fail" style="font-size:0.75rem; padding:2px 8px;">{context_status.upper()}</span>'
+                    else:
+                        status_badge_html = f'<span class="status-badge" style="background:#e5e7eb; font-size:0.75rem; padding:2px 8px;">{context_status.upper()}</span>'
+
+                details_html = f'<div style="font-size:0.8rem; color:var(--text-secondary); margin-top:4px; line-height:1.4;">{context_details}</div>' if context_details else ''
+
                 gallery_items += f'''
                 <div class="gallery-card">
                     <div class="gallery-img-wrap">
-                        <img src="{src}" alt="{img_name}" loading="lazy" class="lightbox-trigger" data-caption="Gambar {img_idx}: {img_name}">
+                        <img src="{src}" alt="{img_name}" loading="lazy" class="lightbox-trigger" data-caption="Gambar {img_idx}: {context_title}">
                     </div>
                     <div class="gallery-caption">
-                        <strong>Gambar {img_idx}:</strong> {img_name}
+                        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px; gap:8px;">
+                            <strong style="color:var(--accent); font-size:0.85rem;">Gambar {img_idx}</strong>
+                            {status_badge_html}
+                        </div>
+                        <div style="font-weight:600; font-size:0.9rem; margin-bottom:2px; color:var(--text);">{context_title}</div>
+                        <div style="font-size:0.75rem; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.5px; font-weight:600;">{context_type}</div>
+                        {details_html}
                     </div>
                 </div>'''
             
             gallery_html = f'''
             <section class="report-section">
                 <h2>Bukti Visual Pengujian (Visual Evidence)</h2>
-                <p class="section-desc">Tangkapan layar bukti pengujian, error, bug, dan ketidaksesuaian UI/UX</p>
+                <p class="section-desc">Koleksi tangkapan layar bukti eksekusi pengujian, form UI, hasil validasi, dan temuan kendala sistem beserta penjelasannya.</p>
                 <div class="gallery-grid">
                     {gallery_items}
                 </div>
