@@ -68,6 +68,14 @@ class QAReportGenerator:
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.data = {}
+        # Auto-load test-results.json if present
+        default_json = self.output_dir / "test-results.json"
+        if default_json.exists():
+            try:
+                with open(default_json, 'r', encoding='utf-8-sig') as f:
+                    self.data = json.load(f)
+            except Exception as e:
+                pass
 
     def load_from_json(self, filename="test-results.json"):
         """Load all data from the single source of truth JSON file."""
@@ -100,7 +108,43 @@ class QAReportGenerator:
         return self.data.get("summary", {})
 
     def _quality_score(self):
-        return self.data.get("quality_score", 0)
+        explicit_score = self.data.get("quality_score") or self.data.get("summary", {}).get("quality_score")
+        if explicit_score is not None and int(explicit_score) > 0:
+            return int(explicit_score)
+
+        # Dynamic Auto-Calculation
+        tests = self._tests()
+        bugs = self._bugs()
+        summary = self._summary()
+        
+        total_tests = len(tests)
+        if not total_tests:
+            total_tests = summary.get("total_tests", summary.get("total", 0))
+
+        if total_tests > 0:
+            if tests:
+                passed = sum(1 for t in tests if str(t.get("status", "")).strip().lower() in ["pass", "passed", "success", "ok"])
+            else:
+                passed = summary.get("passed", 0)
+            base_score = (passed / total_tests) * 100.0
+        else:
+            base_score = 100.0 if not bugs else 75.0
+
+        # Bug deductions based on severity
+        deduction = 0.0
+        for b in bugs:
+            sev = str(b.get("severity", "MEDIUM")).strip().upper()
+            if sev in ["CRITICAL", "1", "BLOCKER"]:
+                deduction += 30.0
+            elif sev in ["HIGH", "2"]:
+                deduction += 18.0
+            elif sev in ["MEDIUM", "3"]:
+                deduction += 10.0
+            elif sev in ["LOW", "4", "5"]:
+                deduction += 4.0
+
+        final_score = max(0, min(100, int(round(base_score - (deduction * 0.4)))))
+        return final_score
 
     def _embed_file(self, path_str, file_type="image"):
         """Embed file as base64 for HTML report. Supports image and video with multi-path lookup."""
