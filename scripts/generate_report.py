@@ -1326,6 +1326,9 @@ class QAReportGenerator:
                 first_ext = first_p.suffix.lower().lstrip(".")
                 first_mime = {"mp4": "video/mp4", "webm": "video/webm"}.get(first_ext, "video/webm")
 
+                # Build map of test names for precise TC naming in dropdown
+                tc_names = [t.get("name", "") for t in tests]
+
                 options_html = ""
                 for v_idx, vpath in enumerate(video_list, 1):
                     b64_v = self._embed_file(vpath, "video")
@@ -1334,22 +1337,29 @@ class QAReportGenerator:
                     mime = {"mp4": "video/mp4", "webm": "video/webm"}.get(ext, "video/webm")
                     src_v = b64_v if b64_v else vpath
                     
-                    # Clean up long playwright hashes & prefixes for short concise label
-                    clean_name = p.stem
-                    import re
-                    # Remove chromium/firefox browser suffix
-                    clean_name = re.sub(r'-(chromium|firefox|webkit|mobile-.*)$', '', clean_name, flags=re.IGNORECASE)
-                    # Remove playwright hash pattern (e.g. -f003b-, -ebc6a-, etc)
-                    clean_name = re.sub(r'-[a-f0-9]{5,8}-', ' - ', clean_name)
-                    # Remove redundant prefixes
-                    clean_name = re.sub(r'^(smoke|security|negative|performance|api-validation|accessibility|chaos)-', r'[\1] ', clean_name, flags=re.IGNORECASE)
-                    clean_name = clean_name.replace("E2E-Banner-", "").replace("E2E-", "").replace("-", " ").strip()
-                    clean_name = re.sub(r'\s+', ' ', clean_name).title()
-                    # Truncate if still too long
-                    if len(clean_name) > 45:
-                        clean_name = clean_name[:42] + "..."
+                    # Match to test result if available or format clean TC label
+                    tc_label = ""
+                    if v_idx - 1 < len(tc_names) and tc_names[v_idx - 1]:
+                        raw_tc = tc_names[v_idx - 1]
+                        # If already has TC prefix like 'TC-01: ...' use it
+                        if raw_tc.startswith("TC-") or raw_tc.startswith("TC "):
+                            tc_label = raw_tc
+                        else:
+                            tc_label = f"TC-{v_idx:02d}: {raw_tc}"
+                    else:
+                        clean_name = p.stem
+                        import re
+                        clean_name = re.sub(r'-(chromium|firefox|webkit|mobile-.*)$', '', clean_name, flags=re.IGNORECASE)
+                        clean_name = re.sub(r'-[a-f0-9]{5,8}-', ' - ', clean_name)
+                        clean_name = re.sub(r'^(smoke|security|negative|performance|api-validation|accessibility|chaos)-', '', clean_name, flags=re.IGNORECASE)
+                        clean_name = clean_name.replace("E2E-Banner-", "").replace("E2E-", "").replace("-", " ").strip()
+                        clean_name = re.sub(r'\s+', ' ', clean_name).title()
+                        tc_label = f"TC-{v_idx:02d}: {clean_name}"
+
+                    if len(tc_label) > 60:
+                        tc_label = tc_label[:57] + "..."
                         
-                    options_html += f'<option value="{src_v}" data-type="{mime}">#{v_idx}. {clean_name}</option>\n'
+                    options_html += f'<option value="{src_v}" data-type="{mime}">{tc_label}</option>\n'
 
                 video_html = f'''
             <section class="report-section">
