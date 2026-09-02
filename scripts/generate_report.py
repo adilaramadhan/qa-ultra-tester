@@ -1333,8 +1333,23 @@ class QAReportGenerator:
                     ext = p.suffix.lower().lstrip(".")
                     mime = {"mp4": "video/mp4", "webm": "video/webm"}.get(ext, "video/webm")
                     src_v = b64_v if b64_v else vpath
-                    v_title = p.stem.replace("-", " ").replace("_", " ").title()
-                    options_html += f'<option value="{src_v}" data-type="{mime}">Video #{v_idx}: {v_title}</option>\n'
+                    
+                    # Clean up long playwright hashes & prefixes for short concise label
+                    clean_name = p.stem
+                    import re
+                    # Remove chromium/firefox browser suffix
+                    clean_name = re.sub(r'-(chromium|firefox|webkit|mobile-.*)$', '', clean_name, flags=re.IGNORECASE)
+                    # Remove playwright hash pattern (e.g. -f003b-, -ebc6a-, etc)
+                    clean_name = re.sub(r'-[a-f0-9]{5,8}-', ' - ', clean_name)
+                    # Remove redundant prefixes
+                    clean_name = re.sub(r'^(smoke|security|negative|performance|api-validation|accessibility|chaos)-', r'[\1] ', clean_name, flags=re.IGNORECASE)
+                    clean_name = clean_name.replace("E2E-Banner-", "").replace("E2E-", "").replace("-", " ").strip()
+                    clean_name = re.sub(r'\s+', ' ', clean_name).title()
+                    # Truncate if still too long
+                    if len(clean_name) > 45:
+                        clean_name = clean_name[:42] + "..."
+                        
+                    options_html += f'<option value="{src_v}" data-type="{mime}">#{v_idx}. {clean_name}</option>\n'
 
                 video_html = f'''
             <section class="report-section">
