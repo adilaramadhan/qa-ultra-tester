@@ -189,42 +189,62 @@ class QAReportGenerator:
         except Exception:
             return None
 
-    def _find_video(self):
-        """Find test recording video file in multiple possible locations and verify existence."""
-        video_path = self.data.get("video_recording") or self.data.get("video")
-        if video_path:
-            # Check if direct path or relative path exists
+    def _find_videos(self):
+        """Find all test recording video files in multiple possible locations and verify existence."""
+        video_paths = []
+        
+        # 1. Check direct video fields from data
+        single_vid = self.data.get("video_recording") or self.data.get("video")
+        if single_vid:
             candidates = [
-                Path(video_path),
-                self.output_dir / video_path,
-                self.output_dir / Path(video_path).name,
-                self.output_dir / "videos" / Path(video_path).name,
-                self.output_dir.parent / video_path,
-                self.output_dir.parent / "videos" / Path(video_path).name,
+                Path(single_vid),
+                self.output_dir / single_vid,
+                self.output_dir / Path(single_vid).name,
+                self.output_dir / "videos" / Path(single_vid).name,
+                self.output_dir.parent / single_vid,
+                self.output_dir.parent / "videos" / Path(single_vid).name,
             ]
             for cand in candidates:
                 if cand.exists() and cand.is_file() and cand.stat().st_size > 0:
-                    return str(cand)
-        
+                    video_paths.append(str(cand))
+                    break
+
+        # 2. Check videos inside evidence in test_results / bugs
+        for t in self.data.get("test_results", []):
+            v = t.get("video") or (t.get("evidence", {}).get("video") if isinstance(t.get("evidence"), dict) else None)
+            if v:
+                cand = self.output_dir / v if not Path(v).is_absolute() else Path(v)
+                if cand.exists() and str(cand) not in video_paths:
+                    video_paths.append(str(cand))
+
+        # 3. Search videos folder & test-results folder
         search_dirs = [
-            self.output_dir,
             self.output_dir / "videos",
             self.output_dir / "test-results",
-            self.output_dir.parent / "test-results",
+            self.output_dir,
             self.output_dir.parent / "videos",
+            self.output_dir.parent / "test-results",
             Path.cwd() / "test-results",
         ]
         for sdir in search_dirs:
-            if sdir.exists():
+            if sdir.exists() and sdir.is_dir():
                 for ext in ["*.webm", "*.mp4", "*.mov"]:
-                    videos = [v for v in sdir.glob(ext) if v.is_file() and v.stat().st_size > 0]
-                    if videos:
-                        return str(videos[0])
-                    # Recursive search inside subfolders
-                    videos_rec = [v for v in sdir.rglob(ext) if v.is_file() and v.stat().st_size > 0]
-                    if videos_rec:
-                        return str(videos_rec[0])
-        return None
+                    for v in sorted(sdir.glob(ext)):
+                        if v.is_file() and v.stat().st_size > 0:
+                            p_str = str(v)
+                            if p_str not in video_paths:
+                                video_paths.append(p_str)
+                    for v in sorted(sdir.rglob(ext)):
+                        if v.is_file() and v.stat().st_size > 0:
+                            p_str = str(v)
+                            if p_str not in video_paths:
+                                video_paths.append(p_str)
+        return video_paths
+
+    def _find_video(self):
+        """Find primary test recording video file."""
+        vids = self._find_videos()
+        return vids[0] if vids else None
 
     # ── DOCX Generator (Mode-Aware UI Layout) ────────────────
     def generate_docx(self, filename="QA_TEST_REPORT.docx"):
@@ -1275,37 +1295,54 @@ class QAReportGenerator:
         readiness = "READY" if score >= 80 and not any(b.get("severity") == "CRITICAL" for b in bugs) else "NOT READY"
         readiness_class = "ready" if readiness == "READY" else "not-ready"
 
-        # Video section
+        # Video section (supports single or multi-video per test)
         video_html = ""
-        video_path = self._find_video()
-        if video_path:
-            b64_video = self._embed_file(video_path, "video")
-            p = Path(video_path)
-            ext = p.suffix.lower().lstrip(".")
-            mime = {"mp4": "video/mp4", "webm": "video/webm"}.get(ext, "video/webm")
-            if b64_video:
+        video_list = self._find_videos()
+        if video_list:
+            if len(video_list) == 1:
+                vpath = video_list[0]
+                b64_video = self._embed_file(vpath, "video")
+                p = Path(vpath)
+                ext = p.suffix.lower().lstrip(".")
+                mime = {"mp4": "video/mp4", "webm": "video/webm"}.get(ext, "video/webm")
+                src = b64_video if b64_video else vpath
                 video_html = f'''
             <section class="report-section">
                 <h2>Test Recording</h2>
-                <p class="section-desc">Video rekaman proses testing otomatis</p>
+                <p class="section-desc">Video rekaman proses testing otomatis ({p.name})</p>
                 <div class="video-container">
                     <video controls preload="metadata" style="width:100%;max-height:500px;border-radius:8px;">
-                        <source src="{b64_video}" type="{mime}">
+                        <source src="{src}" type="{mime}">
                         Browser tidak support video tag.
                     </video>
                 </div>
             </section>'''
             else:
-                # fallback: link to file
+                # Multiple test recordings
+                v_cards = ""
+                for v_idx, vpath in enumerate(video_list, 1):
+                    b64_video = self._embed_file(vpath, "video")
+                    p = Path(vpath)
+                    ext = p.suffix.lower().lstrip(".")
+                    mime = {"mp4": "video/mp4", "webm": "video/webm"}.get(ext, "video/webm")
+                    src = b64_video if b64_video else vpath
+                    v_title = p.stem.replace("-", " ").replace("_", " ").title()
+                    v_cards += f'''
+                    <div style="background:var(--card-bg); border:1px solid var(--border); border-radius:8px; padding:12px;">
+                        <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px; color:var(--text);">🎬 Video #{v_idx}: {v_title}</div>
+                        <div class="video-container">
+                            <video controls preload="metadata" style="width:100%;max-height:360px;border-radius:6px;">
+                                <source src="{src}" type="{mime}">
+                                Browser tidak support video tag.
+                            </video>
+                        </div>
+                    </div>'''
                 video_html = f'''
             <section class="report-section">
-                <h2>Test Recording</h2>
-                <p class="section-desc">Video rekaman proses testing otomatis</p>
-                <div class="video-container">
-                    <video controls preload="metadata" style="width:100%;max-height:500px;border-radius:8px;">
-                        <source src="{video_path}" type="{mime}">
-                        Browser tidak support video tag.
-                    </video>
+                <h2>Test Recording ({len(video_list)} Rekaman Pengujian)</h2>
+                <p class="section-desc">Kumpulan video rekaman eksekusi pengujian per skenario</p>
+                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(360px, 1fr)); gap:16px;">
+                    {v_cards}
                 </div>
             </section>'''
 
