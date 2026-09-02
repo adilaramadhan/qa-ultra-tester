@@ -1295,7 +1295,7 @@ class QAReportGenerator:
         readiness = "READY" if score >= 80 and not any(b.get("severity") == "CRITICAL" for b in bugs) else "NOT READY"
         readiness_class = "ready" if readiness == "READY" else "not-ready"
 
-        # Video section (supports single or multi-video per test)
+        # Video section (supports single or multi-video per test with dropdown selector)
         video_html = ""
         video_list = self._find_videos()
         if video_list:
@@ -1311,39 +1311,62 @@ class QAReportGenerator:
                 <h2>Test Recording</h2>
                 <p class="section-desc">Video rekaman proses testing otomatis ({p.name})</p>
                 <div class="video-container">
-                    <video controls preload="metadata" style="width:100%;max-height:500px;border-radius:8px;">
+                    <video controls preload="metadata" style="width:100%;max-height:540px;border-radius:8px;">
                         <source src="{src}" type="{mime}">
                         Browser tidak support video tag.
                     </video>
                 </div>
             </section>'''
             else:
-                # Multiple test recordings
-                v_cards = ""
+                # Multi-video with interactive Dropdown / Playlist selector (1 main player)
+                first_vpath = video_list[0]
+                first_b64 = self._embed_file(first_vpath, "video")
+                first_p = Path(first_vpath)
+                first_src = first_b64 if first_b64 else first_vpath
+                first_ext = first_p.suffix.lower().lstrip(".")
+                first_mime = {"mp4": "video/mp4", "webm": "video/webm"}.get(first_ext, "video/webm")
+
+                options_html = ""
                 for v_idx, vpath in enumerate(video_list, 1):
-                    b64_video = self._embed_file(vpath, "video")
+                    b64_v = self._embed_file(vpath, "video")
                     p = Path(vpath)
                     ext = p.suffix.lower().lstrip(".")
                     mime = {"mp4": "video/mp4", "webm": "video/webm"}.get(ext, "video/webm")
-                    src = b64_video if b64_video else vpath
+                    src_v = b64_v if b64_v else vpath
                     v_title = p.stem.replace("-", " ").replace("_", " ").title()
-                    v_cards += f'''
-                    <div style="background:var(--card-bg); border:1px solid var(--border); border-radius:8px; padding:12px;">
-                        <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px; color:var(--text);">🎬 Video #{v_idx}: {v_title}</div>
-                        <div class="video-container">
-                            <video controls preload="metadata" style="width:100%;max-height:360px;border-radius:6px;">
-                                <source src="{src}" type="{mime}">
-                                Browser tidak support video tag.
-                            </video>
-                        </div>
-                    </div>'''
+                    options_html += f'<option value="{src_v}" data-type="{mime}">Video #{v_idx}: {v_title}</option>\n'
+
                 video_html = f'''
             <section class="report-section">
-                <h2>Test Recording ({len(video_list)} Rekaman Pengujian)</h2>
-                <p class="section-desc">Kumpulan video rekaman eksekusi pengujian per skenario</p>
-                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(360px, 1fr)); gap:16px;">
-                    {v_cards}
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:8px;">
+                    <div>
+                        <h2 style="margin:0;">Test Recording</h2>
+                        <p class="section-desc" style="margin:4px 0 0 0;">Video rekaman proses testing otomatis ({len(video_list)} skenario)</p>
+                    </div>
+                    <div style="min-width:320px; max-width:500px; width:100%;">
+                        <select id="video-selector" onchange="changeVideo(this.value, this.options[this.selectedIndex].getAttribute('data-type'))" style="width:100%; padding:8px 12px; border-radius:6px; background:var(--card-bg); color:var(--text); border:1px solid var(--border); font-size:0.88rem; font-weight:600; cursor:pointer;">
+                            {options_html}
+                        </select>
+                    </div>
                 </div>
+                <div class="video-container" style="background:#000; border-radius:8px; overflow:hidden; box-shadow:0 4px 12px rgba(0,0,0,0.15);">
+                    <video id="main-test-video" controls preload="metadata" style="width:100%; max-height:540px; display:block;">
+                        <source id="main-video-source" src="{first_src}" type="{first_mime}">
+                        Browser tidak support video tag.
+                    </video>
+                </div>
+                <script>
+                    function changeVideo(src, type) {{
+                        const video = document.getElementById('main-test-video');
+                        const source = document.getElementById('main-video-source');
+                        if (video && source) {{
+                            source.src = src;
+                            if (type) source.type = type;
+                            video.load();
+                            video.play().catch(function(){{}});
+                        }}
+                    }}
+                </script>
             </section>'''
 
         # Bug rows
