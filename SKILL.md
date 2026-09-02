@@ -608,6 +608,19 @@ Semua output, file, folder, screenshot, video, script test, dan report **WAJIB d
 **Phase yang dijalankan tergantung trigger mode (lihat Section 2).** Berikut daftar lengkap phase:
 
 ```markdown
+## Phase 0: Pre-Run Cleanup & Fresh Artifacts (WAJIB)
+1. Sebelum pengujian dijalankan ulang, bersihkan folder artefak lama agar tidak terjadi duplikasi file visual:
+   - Bersihkan folder `screenshots/` dan `videos/` di dalam `hasil-test/`
+   - Pastikan folder tujuan bersih sehingga bukti visual selalu ter-update (fresh):
+     ```typescript
+     import fs from 'fs';
+     const ssDir = './hasil-test/screenshots';
+     if (fs.existsSync(ssDir)) {
+       fs.rmSync(ssDir, { recursive: true, force: true });
+     }
+     fs.mkdirSync(ssDir, { recursive: true });
+     ```
+
 ## Phase 1: Discovery (5-10 menit) — ALL MODES
 1. Buka target URL
 2. Snapshot semua halaman

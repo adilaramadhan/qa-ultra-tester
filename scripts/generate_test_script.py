@@ -313,6 +313,15 @@ test.describe('Chaos Engineering', () => {{
     # ── Playwright Config ────────────────────────────────────
     def _gen_playwright_config(self):
         content = """import { defineConfig, devices } from '@playwright/test';
+import * as fs from 'fs';
+import * as path from 'path';
+
+// Clean old artifacts before test execution
+const screenshotsDir = path.resolve(__dirname, '../screenshots');
+if (fs.existsSync(screenshotsDir)) {
+  fs.rmSync(screenshotsDir, { recursive: true, force: true });
+}
+fs.mkdirSync(screenshotsDir, { recursive: true });
 
 export default defineConfig({
   testDir: './tests',
